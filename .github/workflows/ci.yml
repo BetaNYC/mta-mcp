@@ -1,0 +1,89 @@
+# Continuous integration for mta-mcp.
+#
+# Enforces that the TypeScript compiles cleanly and the whole suite passes on
+# every pull request and every push to main, across both ends of the supported
+# Node range, per platform/system/engineering-standards.md § 1 and § 3 in the
+# BetaNYC workspace: tests run at both ends of the declared version range so
+# version drift is caught before merge.
+#
+# Node matrix: 20.x and 22.x. package.json declares "engines.node >= 18", but
+# Node 18 reached End-of-Life on 2025-04-30, so the floor tested here is Node 20
+# (oldest actively-maintained LTS) with Node 22 as the ceiling. This matches the
+# sibling repos nyc-311-mcp and nyc-charter-laws-rules.
+#
+# THIS JOB MAKES NO REQUEST TO MTA. `npm test` runs entirely against the
+# fixtures in test/fixtures/ with fetch stubbed. The single live request this
+# repo makes is `npm run smoke`, which is deliberately absent here: a CI job
+# that fetches on every push is how a polite client becomes an impolite one.
+#
+# `npm test` is `npm run build && node --test dist/mta.test.js test/*.test.mjs`.
+# The glob is deliberately UNQUOTED so the shell expands it and node receives
+# literal file paths. Quoted, node does the matching itself, and Node 20 does
+# not accept glob patterns as `node --test` arguments at all (added in 22) — it
+# treats the pattern as a literal path and runs ZERO of the test/ files, while
+# the explicit dist/mta.test.js path still runs, so the breakage looks like a
+# partial pass rather than a miss. Do not re-add the quotes.
+#
+# There is no release.yml and no npm publish step, and that is deliberate: this
+# package is private and is never published. See docs/terms-compliance.md.
+
+name: CI
+
+on:
+  # `test/**` matters: the tests are .mjs, so `**/*.ts` does not match them and
+  # a test-only change would otherwise skip this gate entirely. `data/**` and
+  # `scripts/**` matter because the bundled station list and its generator are
+  # both under test.
+  pull_request:
+    branches: [main]
+    paths:
+      - "**/*.ts"
+      - "test/**"
+      - "data/**"
+      - "scripts/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/**"
+  push:
+    branches: [main]
+    paths:
+      - "**/*.ts"
+      - "test/**"
+      - "data/**"
+      - "scripts/**"
+      - "package.json"
+      - "package-lock.json"
+      - ".github/workflows/**"
+  # Manual trigger — a path-scoped pull_request/push event does not fire on the
+  # very PR that introduces the workflow, so without this the gate would never
+  # run on its own PR.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Build & test (Node ${{ matrix.node-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        node-version:
+          - "20.x"
+          - "22.x"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build and test
+        run: npm test
