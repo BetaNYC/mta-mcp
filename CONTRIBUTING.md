@@ -61,7 +61,7 @@ If you change how alerts are matched to stations, you will meet these. Each has 
 
 **2. A station being mentioned in an alert does not mean its service got worse.** `Planned - Express to Local` alerts tag the stations that *gain* service. On 2026-09-19, stop 628 is tagged in two alerts — both are the 4 and the 5 running local through it, which is more trains, not fewer. Classify on `mercury_alert.alert_type` through the effect map in `src/mta.ts`; never on station mention alone.
 
-**3. Station names are not unique.** 76 of 496 parent stations share a name with another. `125 St` is four different stations on four different lines. `resolve_station` returns every candidate and never picks one; the `route_id` filter is the disambiguator. If you add a code path that collapses candidates to a single station, it will be wrong roughly a quarter of the time on the most common names in the system.
+**3. Station names are not unique.** 193 of 496 parent stations share a name with another, across 76 distinct names. `125 St` is four different stations on four different lines. `resolve_station` returns every candidate and never picks one; the `route_id` filter is the disambiguator. If you add a code path that collapses candidates to a single station, it will be wrong roughly a quarter of the time on the most common names in the system.
 
 A fourth thing worth knowing, though it has no test because it is a design stance rather than a bug: **an alert type we do not recognize counts as a disruption**, and it widens to every station on the route. If we cannot say what a status means, we cannot claim to know what its station tagging means either. Fail toward caution.
 

@@ -35,7 +35,7 @@ A physical trunk of track, named for the street it runs under — the Lexington 
 
 Several parent stations a rider can transfer between without leaving fare control. These are **not** one station in the data, and they come in two flavors, only one of which this server handles:
 
-**Same name, several IDs.** 76 of 496 parent stations share a `stop_name` with at least one other. `125 St` is four stations on four unrelated lines — `116` (1), `225` (2/3), `621` (4/5/6/6X), `A15` (A/B/C/D). `Times Sq-42 St` is four. `14 St` is three. This is why `resolve_station` returns every candidate and never picks, and why the `route_id` filter has to work.
+**Same name, several IDs.** 193 of 496 parent stations share a name with another, across 76 distinct names. `125 St` is four stations on four unrelated lines — `116` (1), `225` (2/3), `621` (4/5/6/6X), `A15` (A/B/C/D). `Times Sq-42 St` is four. `14 St` is three. This is why `resolve_station` returns every candidate and never picks, and why the `route_id` filter has to work.
 
 **Different names, linked only by `transfers.txt`.** 60 such pairs — `Times Sq-42 St (127)` ↔ `42 St-Port Authority Bus Terminal (A27)`, `Park Place (228)` ↔ `World Trade Center (E01)`. **We deliberately do not model these.** Asking about one name will not surface alerts filed against its connected neighbor under a different name. The gap is documented in the README rather than coded around, because nothing in BetaNYC's actual use has needed it.
 
