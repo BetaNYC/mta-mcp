@@ -135,7 +135,7 @@ Tool shapes can change without notice.
 
 <h2>Start by conceding the easy case</h2>
 <p>If your question is <em>"is the L running right now,"</em> close this page. Open
-<a href="https://www.mta.info/alerts">mta.info</a> or any transit app. They are free, official,
+<a href="https://mta.info/alerts">mta.info</a> or any transit app. They are free, official,
 and faster than anything here. This tool would be a worse answer.</p>
 <p>It earns its place on a narrower question, and the narrowness is the point: <strong>a date in the
 future, a specific station, and a yes or no you are willing to put in an email to 3,000
@@ -268,7 +268,7 @@ station mention.</div>
 <p>BetaNYC publishes seven MCP servers to npm. This one is deliberately not among them, and the
 reason is worth more than the code.</p>
 
-<p>MTA's <a href="https://www.mta.info/developers/terms-and-conditions">data feed terms</a>, term 1:</p>
+<p>MTA's <a href="https://mta.info/developers/terms-and-conditions">data feed terms</a>, term 1:</p>
 
 <blockquote style="border-left:3px solid var(--border);margin:16px 0;padding:4px 0 4px 16px;color:var(--body)">
 "In developing your app, you will provide that the MTA data feed is available to others only from a
@@ -356,15 +356,63 @@ touches MTA at all.</p>
       is built on them.</li>
 </ul>
 
+<h2>Other NYC subway MCP servers</h2>
+
+<p>This is not the only one, and for most questions it is not the one you want. Several of these
+are further along, and all of them do <strong>live arrivals</strong>, which this server does not do
+at all. If your question is "when is the next train," start here rather than with us.</p>
+
+<table>
+  <tr>
+    <th>Project</th><th>Language</th><th>What it does that this one does not</th>
+  </tr>
+  <tr>
+    <td><a href="https://github.com/sasabasara/where_is_my_train_mcp"><strong>where_is_my_train_mcp</strong></a>
+        <br><span class="small">sasabasara · also on
+        <a href="https://smithery.ai/server/@sasabasara/where_is_my_train_mcp">Smithery</a></span></td>
+    <td>TypeScript</td>
+    <td>The broadest of these. Live arrivals with crowding where available, fuzzy station search,
+        elevator status, transfers, and nearby-station lookup by latitude and longitude.</td>
+  </tr>
+  <tr>
+    <td><a href="https://github.com/hardparking/nyc-subway-mcp-server"><strong>nyc-subway-mcp-server</strong></a>
+        <br><span class="small">hardparking</span></td>
+    <td>TypeScript</td>
+    <td>Real-time arrivals, live vehicle positions, and a line-status overview. Runs over HTTP as
+        well as stdio.</td>
+  </tr>
+  <tr>
+    <td><a href="https://github.com/Aarekaz/metro-mcp"><strong>metro-mcp</strong></a>
+        <br><span class="small">Aarekaz</span></td>
+    <td>TypeScript</td>
+    <td>Covers <strong>DC Metro as well as NYC</strong>. Anonymous, read-only, deployed on
+        Cloudflare Workers, so there is nothing to install.</td>
+  </tr>
+  <tr>
+    <td><a href="https://github.com/nkasmanoff/mta-mcp"><strong>mta-mcp</strong></a>
+        <br><span class="small">nkasmanoff · same name as ours, no relation</span></td>
+    <td>Python</td>
+    <td>Next-train arrivals by station and direction. Small and readable, which makes it a good
+        first thing to look at if you are learning how these fit together.</td>
+  </tr>
+</table>
+
+<p><strong>What this server does that they do not:</strong> take a <em>date</em>. Every one of the
+above answers about now. None of them accepts a future date, and none of them separates service
+that got <em>worse</em> from service that got <em>better</em> at a station. That gap is the only
+reason this exists.</p>
+
 <h2>Credits</h2>
 <p>Data from the <a href="https://api.mta.info/#/serviceAlerts">MTA service alerts feed</a>,
 free to use under MTA's terms. Station names from MTA's published static GTFS. MTA's own
 implementation notes live at
-<a href="https://github.com/nymta/gtfs-documentation">nymta/gtfs-documentation</a>.</p>
-<p>Other people have built NYC subway MCP servers, and they do things this one does not, notably
-live arrivals: <a href="https://github.com/sasabasara/where_is_my_train_mcp">where_is_my_train_mcp</a>,
-<a href="https://github.com/hardparking/nyc-subway-mcp-server">nyc-subway-mcp-server</a>,
-<a href="https://github.com/Aarekaz/metro-mcp">metro-mcp</a>.</p>
+<a href="https://github.com/nymta/gtfs-documentation">nymta/gtfs-documentation</a>, which is
+sparse but is the only first-party source for how these feeds actually behave.</p>
+<p class="small"><strong>Link note.</strong> Every outbound link on this page was HTTP-checked on
+2026-09-21. The <code>mta.info</code> and <code>claude.ai</code> links return 403 to a command-line
+request because of bot protection, not because they are dead; both were confirmed in a real
+browser. MTA redirects <code>www.mta.info</code> to <code>mta.info</code>, so the bare form is
+used here.</p>
 <p><strong>AI disclosure.</strong> This server was largely written with
 <a href="https://claude.ai">Claude</a>, and this page with it too. Every response shape shown here
 was observed in a real call rather than invented, which is the repository's own standing rule and
@@ -378,7 +426,7 @@ the reason the badges exist.</p>
     MIT licensed. The MIT license covers this code, not MTA's data or trademarks.</p>
     <p class="small"><strong>Unofficial.</strong> BetaNYC is not the MTA and makes no claim that
     this data is accurate, complete, or timely. Confirm service at
-    <a href="https://www.mta.info">mta.info</a> before you travel.</p>
+    <a href="https://mta.info">mta.info</a> before you travel.</p>
   </div>
 </footer>
 
