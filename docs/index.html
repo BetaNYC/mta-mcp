@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mta-mcp — subway service alerts for AI assistants</title>
+<meta name="description" content="An MCP server that answers one question: is the subway line we recommend disrupted on that date, at that station? Built by BetaNYC.">
+<style>
+/* BetaNYC brand tokens — archive/betanyc/brand.md, finalized 2026-05-06.
+   Poppins/Roboto are the brand faces but cannot travel in a zero-dependency
+   page without a webfont request, so this uses a system stack and holds the
+   colors exactly. Colors are the load-bearing brand signal here. */
+:root{
+  --blue:#2359a8; --blue-2:#B8D6FF; --bg-blue:#EEF4FF; --bg-blue-lt:#F9FAFF;
+  --body:#414141; --border:#949494; --light:#F1F1F1; --white:#fff;
+  --good:#1a7f4b; --warn:#9a5b00; --bad:#b3261e;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
+  --sans:system-ui,-apple-system,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;font-family:var(--sans);color:var(--body);background:var(--white);
+     font-size:17px;line-height:1.65;-webkit-text-size-adjust:100%}
+.wrap{max-width:1000px;margin:0 auto;padding:0 16px}
+h1,h2,h3{color:var(--blue);font-weight:700;line-height:1.2}
+h1{font-size:clamp(28px,5vmin,46px);margin:0 0 12px}
+h2{font-size:clamp(22px,3.4vmin,31px);margin:56px 0 6px}
+h3{font-size:clamp(17px,2.2vmin,21px);margin:28px 0 6px}
+p{margin:0 0 16px} a{color:var(--blue)}
+code,kbd{font-family:var(--mono);font-size:.88em}
+
+header{background:var(--bg-blue);border-bottom:1px solid var(--border);padding:52px 0 40px}
+.tag{display:inline-block;font-size:13px;font-weight:700;letter-spacing:.06em;
+     text-transform:uppercase;color:var(--blue);margin-bottom:10px}
+.lede{font-size:clamp(17px,2.3vmin,21px);max-width:62ch}
+.hdr-meta{margin-top:20px;font-size:14px;color:var(--body)}
+.hdr-meta strong{color:var(--blue)}
+
+/* badges — delivery-patterns.md: every claim is verified or illustrative,
+   and the two are never blurred. */
+.badge{display:inline-block;font-family:var(--mono);font-size:11px;font-weight:700;
+       letter-spacing:.04em;padding:3px 8px;border:1px solid var(--border);
+       border-radius:2px;vertical-align:middle;white-space:nowrap}
+.badge.v{background:#e8f4ec;border-color:var(--good);color:var(--good)}
+.badge.i{background:var(--light);border-color:var(--border);color:var(--body)}
+
+.demo{border:1px solid var(--border);border-radius:2px;margin:22px 0;background:var(--white)}
+.demo-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
+           padding:12px 16px;background:var(--bg-blue-lt);border-bottom:1px solid var(--border)}
+.demo-q{font-weight:700;color:var(--blue);font-size:16px}
+.cols{display:grid;grid-template-columns:1fr 1fr;gap:0}
+@media(max-width:760px){.cols{grid-template-columns:1fr}}
+.col{padding:16px}
+.col+.col{border-left:1px solid var(--border)}
+@media(max-width:760px){.col+.col{border-left:0;border-top:1px solid var(--border)}}
+.col-h{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.07em;
+       text-transform:uppercase;color:var(--body);margin-bottom:10px}
+.byhand{background:var(--light)}
+.byhand ol{margin:0;padding-left:20px;font-size:15px}
+.byhand li{margin-bottom:7px}
+.cost{margin-top:12px;font-size:14px;font-weight:700;color:var(--warn)}
+
+.term{background:#1c2733;color:#e7edf3;border-radius:2px;padding:14px 16px;
+      font-family:var(--mono);font-size:13px;line-height:1.55;overflow-x:auto;
+      white-space:pre-wrap;word-break:break-word;min-height:96px}
+.term .p{color:#7fd6a6}
+.term .k{color:#8fc4ff}
+.term .s{color:#f0c674}
+.term .c{color:#93a3b1}
+.cursor{display:inline-block;width:7px;height:15px;background:#7fd6a6;
+        vertical-align:-2px;animation:bl 1s steps(2,start) infinite}
+@keyframes bl{to{visibility:hidden}}
+.out{margin-top:12px;font-size:15px}
+.out.hide{display:none}
+.kv{display:grid;grid-template-columns:auto 1fr;gap:4px 12px;
+    font-family:var(--mono);font-size:13px;margin:8px 0}
+.kv dt{color:var(--body);opacity:.75}
+.kv dd{margin:0;font-weight:700}
+.t{color:var(--good)} .f{color:var(--bad)} .n{color:var(--warn)}
+.verdict{margin-top:12px;padding:11px 13px;background:var(--bg-blue);
+         border-left:3px solid var(--blue);font-size:15px}
+.replay{font:inherit;font-size:13px;font-weight:700;color:var(--blue);background:var(--white);
+        border:1px solid var(--border);border-radius:2px;padding:5px 11px;cursor:pointer}
+.replay:hover{background:var(--blue-2)}
+
+.note{border:1px solid var(--border);border-left:3px solid var(--blue);
+      background:var(--bg-blue-lt);padding:14px 16px;margin:20px 0;font-size:15px}
+.note b{color:var(--blue)}
+.warnbox{border:1px solid var(--warn);border-left:3px solid var(--warn);
+         background:#fff8ee;padding:14px 16px;margin:20px 0;font-size:15px}
+table{border-collapse:collapse;width:100%;font-size:15px;margin:16px 0}
+th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
+th{background:var(--bg-blue);color:var(--blue)}
+pre{background:var(--light);border:1px solid var(--border);border-radius:2px;
+    padding:13px 15px;overflow-x:auto;font-size:13px;line-height:1.5}
+/* Alpha banner — sticky so it cannot be scrolled past. This is early code and
+   the page should never let a reader forget that. */
+.alpha-bar{position:sticky;top:0;z-index:50;background:#9a5b00;color:#fff;
+           font-weight:700;font-size:14px;text-align:center;padding:9px 16px;
+           letter-spacing:.01em}
+.alpha-bar a{color:#fff;text-decoration:underline}
+.alpha-box{border:2px solid var(--warn);border-radius:2px;background:#fff8ee;
+           padding:18px 20px;margin:26px 0}
+.alpha-box h3{color:var(--warn);margin:0 0 10px;font-size:19px}
+.alpha-box ul{margin:10px 0 0;padding-left:20px}
+.alpha-box li{margin-bottom:7px;font-size:15px}
+
+footer{background:var(--bg-blue);border-top:1px solid var(--border);margin-top:64px;
+       padding:34px 0;font-size:14px}
+.small{font-size:14px;color:var(--body);opacity:.85}
+ul.tight li{margin-bottom:6px}
+</style>
+</head>
+<body>
+
+<div class="alpha-bar">⚠️ Alpha, v0.1.0 — early code, shared to find out what breaks.
+Tool shapes can change without notice.
+<a href="https://github.com/BetaNYC/mta-mcp/issues">Tell us what's wrong</a></div>
+
+<header>
+  <div class="wrap">
+    <span class="tag">BetaNYC · civic tech, open source</span>
+    <h1>mta-mcp</h1>
+    <p class="lede">An <a href="https://modelcontextprotocol.io/">MCP</a> server that answers one
+    question well: <strong>is the subway line we recommend disrupted on that date, at that
+    station?</strong></p>
+    <p class="hdr-meta">Every demo below is badged. <span class="badge v">Verified 2026-09-21</span>
+    means that exact call was run and that is what came back.
+    <span class="badge i">Illustrative</span> means it shows the shape of an answer, not live values.
+    <br><strong>MTA's feed moves.</strong> A verified panel is a photograph, not a window.</p>
+  </div>
+</header>
+
+<div class="wrap">
+
+<h2>Start by conceding the easy case</h2>
+<p>If your question is <em>"is the L running right now,"</em> close this page. Open
+<a href="https://www.mta.info/alerts">mta.info</a> or any transit app. They are free, official,
+and faster than anything here. This tool would be a worse answer.</p>
+<p>It earns its place on a narrower question, and the narrowness is the point: <strong>a date in the
+future, a specific station, and a yes or no you are willing to put in an email to 3,000
+people.</strong> That question is tedious by hand and easy to get confidently wrong.</p>
+
+<h2>Simple first: which station did you mean?</h2>
+
+<div class="demo" data-demo="1">
+  <div class="demo-head">
+    <span class="demo-q">"Which station is 125 St?"</span>
+    <span><span class="badge v">Verified 2026-09-21</span>
+    <button class="replay" data-replay="1">Replay</button></span>
+  </div>
+  <div class="cols">
+    <div class="col byhand">
+      <div class="col-h">By hand</div>
+      <ol>
+        <li>Search "125 St subway station."</li>
+        <li>Get four different stations back, on four unrelated lines.</li>
+        <li>Work out which one your event is near.</li>
+        <li>Find its GTFS id if you need to check anything programmatically.</li>
+      </ol>
+      <div class="cost">Answerable, but you have to already know the system.</div>
+    </div>
+    <div class="col">
+      <div class="col-h">mta-mcp</div>
+      <div class="term" data-term="1"><span class="cursor"></span></div>
+      <div class="out hide" data-out="1">
+        <dl class="kv">
+          <dt>match_count</dt><dd>4</dd>
+          <dt>unambiguous</dt><dd class="f">false</dd>
+        </dl>
+        <table>
+          <tr><th>stop_id</th><th>routes</th></tr>
+          <tr><td><code>116</code></td><td>1</td></tr>
+          <tr><td><code>225</code></td><td>2, 3</td></tr>
+          <tr><td><code>621</code></td><td>4, 5, 6, 6X</td></tr>
+          <tr><td><code>A15</code></td><td>A, B, C, D</td></tr>
+        </table>
+        <div class="verdict"><strong>It refuses to guess.</strong> 193 of 496 stations share a
+        name with another. Pass <code>route_id</code> to narrow it, or pick a
+        <code>stop_id</code>.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="note"><b>Why this one never goes stale.</b> <code>resolve_station</code> reads a
+station list generated from MTA's static GTFS and committed to the repo. It makes no network call,
+so this panel will read the same next year unless MTA renames a station.</div>
+
+<h2>Harder: "affected" does not mean "worse"</h2>
+
+<p>This is the demo worth your time. It is a real trap, and the obvious implementation walks
+straight into it.</p>
+
+<div class="demo" data-demo="2">
+  <div class="demo-head">
+    <span class="demo-q">"Is the 4 train disrupted at 68 St–Hunter College on Sat Sep 26?"</span>
+    <span><span class="badge v">Verified 2026-09-21</span>
+    <button class="replay" data-replay="2">Replay</button></span>
+  </div>
+  <div class="cols">
+    <div class="col byhand">
+      <div class="col-h">By hand</div>
+      <ol>
+        <li>Open <code>mta.info/alerts</code>. Filter to the 4, set the date to 09/26.</li>
+        <li>Read the results. <strong>Route names render as images</strong>, so a copy-paste
+            or a screen reader loses which train each alert is about.</li>
+        <li>Find "4 runs local between 125 St and Grand Central." Your station is on that
+            stretch, so it is mentioned.</li>
+        <li>Decide what "mentioned" means. Is local service better or worse for you?</li>
+        <li>Notice a second alert with no station list at all, and decide whether it matters.</li>
+      </ol>
+      <div class="cost">Two judgment calls, and step 4 is where people get it wrong.</div>
+    </div>
+    <div class="col">
+      <div class="col-h">mta-mcp</div>
+      <div class="term" data-term="2"><span class="cursor"></span></div>
+      <div class="out hide" data-out="2">
+        <dl class="kv">
+          <dt>disrupted</dt><dd class="n">true</dd>
+          <dt>alert_count</dt><dd>2</dd>
+          <dt>station_level_detail</dt><dd class="f">false</dd>
+        </dl>
+        <table>
+          <tr><th>alert</th><th>effect</th><th>counts as disruption</th></tr>
+          <tr><td>Planned&nbsp;-&nbsp;Express to Local<br><span class="small">tags your station</span></td>
+              <td><code>added_at_local_stops</code></td><td class="t">no</td></tr>
+          <tr><td>Planned&nbsp;-&nbsp;Stops Skipped<br><span class="small">names no stations</span></td>
+              <td><code>reduced</code></td><td class="n">yes</td></tr>
+        </table>
+        <div class="verdict"><strong>Both behaviors, one answer.</strong> The express-to-local
+        alert tags 68 St and is <em>not</em> counted as a disruption, because running local means
+        <em>more</em> trains stop there. The second alert names no stations, so the tool will not
+        claim your station is clear. It fails toward caution and says which alert caused it.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="warnbox"><b>The trap, stated plainly.</b> A check that asks <em>"is my station mentioned
+in any alert?"</em> reports a disruption here that does not exist. The alert mentioning 68 St is
+<em>added</em> service. Every existing NYC subway MCP we surveyed collapses this into one generic
+"service change" bucket. Classification is on MTA's <code>alert_type</code>, never on
+station mention.</div>
+
+<h2>What it cannot do</h2>
+
+<p>Knowing which questions a tool cannot answer is part of using it.</p>
+
+<table>
+  <tr><th>Not this</th><th>Why</th></tr>
+  <tr><td>"When is the next 6 train?"</td>
+      <td>No arrivals or trip updates. Those are protobuf-only feeds and would pull in three
+          custom <code>.proto</code> files for a feature this tool does not need.</td></tr>
+  <tr><td>"Is the M15 bus delayed?"</td>
+      <td>Bus Time needs an API key and is out of scope. Bus <em>alerts</em> are in the same
+          keyless family and could be added.</td></tr>
+  <tr><td>"Are Times Sq and Port Authority connected?"</td>
+      <td>Stations linked only by transfer, under different names, are not modeled. 60 such pairs
+          exist. Asking about one name will not surface alerts filed against the other.</td></tr>
+  <tr><td>"Is my station definitely fine?"</td>
+      <td>MTA tags stations only when it considers the change significant. Every response carries
+          <code>station_level_detail</code> so a quiet answer is never mistaken for a guarantee.</td></tr>
+</table>
+
+<h2>Why this is not on npm</h2>
+
+<p>BetaNYC publishes seven MCP servers to npm. This one is deliberately not among them, and the
+reason is worth more than the code.</p>
+
+<p>MTA's <a href="https://www.mta.info/developers/terms-and-conditions">data feed terms</a>, term 1:</p>
+
+<blockquote style="border-left:3px solid var(--border);margin:16px 0;padding:4px 0 4px 16px;color:var(--body)">
+"In developing your app, you will provide that the MTA data feed is available to others only from a
+non-MTA server. Accordingly, you will download and store the MTA data feed on a non-MTA server
+<strong>which users of your app will access in order to obtain data</strong>. MTA prohibits the
+development of an app that would make the data available to others directly from MTA's server(s)."
+</blockquote>
+
+<p>A published package makes every installer's machine fetch straight from
+<code>api-endpoint.mta.info</code>, with no server of ours in between. There is a tempting
+counter-argument, that each user is simply fetching for themselves. It does not survive the clause's
+own wording: the non-MTA server is defined as the one <em>"which users of your app will access in
+order to obtain data."</em> It names the exact party the counter-argument tries to carve out.</p>
+
+<p>So <code>package.json</code> sets <code>"private": true</code>, and the decision is enforced in
+code rather than in a comment somebody later deletes.</p>
+
+<div class="note"><b>The same terms bind the output.</b> No claim that the data is accurate,
+complete, or timely. A visible as-of timestamp on anything cached. And MTA route bullets are
+licensed intellectual property, separate from the free data terms, so this page and every response
+write "the 6 train" rather than reproducing a roundel.</div>
+
+<h2>Running it</h2>
+
+<div class="alpha-box">
+  <h3>⚠️ Read this before you install it</h3>
+  <p style="margin:0">This is <strong>v0.1.0 alpha</strong>, in active development, and it has not
+  been used by anyone outside BetaNYC. We are sharing it this early on purpose, to find out what
+  breaks. <strong>Tool names, parameters, and response shapes can change without notice.</strong>
+  Do not build anything you care about on it yet.</p>
+  <ul>
+    <li><strong>Only the subway alerts feed has been inspected.</strong> Bus, Long Island Rail
+        Road, and Metro-North are untested and may not share the same conventions. MTA claims
+        they do, and we have already found one place that claim does not hold.</li>
+    <li><strong>The effect classification covers 11 <code>alert_type</code> values</strong> seen
+        across two live pulls. MTA can emit others. An unrecognized one counts as a disruption
+        by design, but that is a safety net rather than coverage.</li>
+    <li><strong>Tested against a handful of real dates and stations</strong>, not a broad corpus.</li>
+  </ul>
+  <p style="margin:12px 0 0"><strong>Found something wrong?</strong>
+  <a href="https://github.com/BetaNYC/mta-mcp/issues">Open an issue.</a> That is the point of
+  putting it out this early.</p>
+</div>
+
+<p>Clone and build. Node 20 or newer. No API key is needed for any feed it uses.</p>
+
+<pre>git clone https://github.com/BetaNYC/mta-mcp.git
+cd mta-mcp
+npm install
+npm run build</pre>
+
+<p>Then point an MCP client at the build. For Claude Code, in <code>.mcp.json</code>:</p>
+
+<pre>{
+  "mcpServers": {
+    "mta-mcp": {
+      "command": "node",
+      "args": ["${HOME}/Code/mta-mcp/dist/index.js"]
+    }
+  }
+}</pre>
+
+<h3>Being gentle with a public feed</h3>
+<p>MTA publishes no rate limit, no refresh cadence, and no cache headers, so politeness cannot be
+negotiated with the server. Six mechanisms impose it instead, all on by default: a 60-second
+response cache, single-flight de-duplication, a process-wide one-second floor between requests,
+bounded retry that honors <code>Retry-After</code>, a 15-second timeout, and a
+<code>User-Agent</code> that identifies the project.</p>
+<p><strong>There is no background polling</strong>, no prefetch, no warm-up fetch. It fetches only
+when a tool is called. The test suite makes zero network requests, so continuous integration never
+touches MTA at all.</p>
+
+<h2>What we could not verify</h2>
+<ul class="tight">
+  <li><strong>MTA's own documentation is wrong in at least one place.</strong> It states that a
+      status rank is appended to every alert id. We measured it present on <strong>1 of 150</strong>
+      entities. Whether that is a partial rollout or a documentation error is unknown, and we build
+      on a different field because of it.</li>
+  <li><strong>Refresh cadence is undocumented.</strong> Not published anywhere, and the response
+      carries no cache headers. Our polling floor is a guess made conservative on purpose.</li>
+  <li><strong>Only the subway feed was inspected.</strong> Bus, Long Island Rail Road, and
+      Metro-North alerts may not share the same conventions. MTA claims cross-agency uniformity;
+      the point above is one place that claim does not hold.</li>
+  <li><strong>Six documented fields never appeared</strong> in any live sample we pulled, so nothing
+      is built on them.</li>
+</ul>
+
+<h2>Credits</h2>
+<p>Data from the <a href="https://api.mta.info/#/serviceAlerts">MTA service alerts feed</a>,
+free to use under MTA's terms. Station names from MTA's published static GTFS. MTA's own
+implementation notes live at
+<a href="https://github.com/nymta/gtfs-documentation">nymta/gtfs-documentation</a>.</p>
+<p>Other people have built NYC subway MCP servers, and they do things this one does not, notably
+live arrivals: <a href="https://github.com/sasabasara/where_is_my_train_mcp">where_is_my_train_mcp</a>,
+<a href="https://github.com/hardparking/nyc-subway-mcp-server">nyc-subway-mcp-server</a>,
+<a href="https://github.com/Aarekaz/metro-mcp">metro-mcp</a>.</p>
+<p><strong>AI disclosure.</strong> This server was largely written with
+<a href="https://claude.ai">Claude</a>, and this page with it too. Every response shape shown here
+was observed in a real call rather than invented, which is the repository's own standing rule and
+the reason the badges exist.</p>
+
+</div>
+
+<footer>
+  <div class="wrap">
+    <p><strong>mta-mcp</strong> — built by <a href="https://beta.nyc">BetaNYC</a>.
+    MIT licensed. The MIT license covers this code, not MTA's data or trademarks.</p>
+    <p class="small"><strong>Unofficial.</strong> BetaNYC is not the MTA and makes no claim that
+    this data is accurate, complete, or timely. Confirm service at
+    <a href="https://www.mta.info">mta.info</a> before you travel.</p>
+  </div>
+</footer>
+
+<script>
+/* Animation is driven by ONE requestAnimationFrame loop reading elapsed time.
+   Never a stack of setTimeouts: browsers clamp timers to ~1/sec in a
+   backgrounded tab, which desynchronises a timed sequence and strands it
+   mid-animation. Reading elapsed ms renders correctly whenever it ticks.
+   (delivery-patterns.md, trap 1.) */
+(function(){
+  var DEMOS = {
+    1: {lines:[
+      {t:'resolve_station(', c:'p'},
+      {t:'query', c:'k'}, {t:': ', c:'p'}, {t:'"125 St"', c:'s'}, {t:')', c:'p'}
+    ], cps:26},
+    2: {lines:[
+      {t:'check_route_on_date(', c:'p'},
+      {t:'route_id', c:'k'}, {t:': ', c:'p'}, {t:'"4"', c:'s'}, {t:', ', c:'p'},
+      {t:'date', c:'k'}, {t:': ', c:'p'}, {t:'"2026-09-26"', c:'s'}, {t:', ', c:'p'},
+      {t:'stop_id', c:'k'}, {t:': ', c:'p'}, {t:'"628"', c:'s'}, {t:')', c:'p'}
+    ], cps:30}
+  };
+  var state = {};
+
+  function full(id){ return DEMOS[id].lines.map(function(s){return s.t}).join(''); }
+
+  function render(id, nChars, done){
+    var d = DEMOS[id], el = document.querySelector('[data-term="'+id+'"]');
+    if(!el) return;
+    var html = '', used = 0;
+    for(var i=0;i<d.lines.length;i++){
+      var seg = d.lines[i];
+      if(used >= nChars) break;
+      var take = Math.min(seg.t.length, nChars - used);
+      var txt = seg.t.slice(0, take)
+        .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+      html += '<span class="'+seg.c+'">'+txt+'</span>';
+      used += take;
+    }
+    html += done ? '\n<span class="c">// running…</span>' : '<span class="cursor"></span>';
+    el.innerHTML = html;
+  }
+
+  function start(id){
+    state[id] = {t0: performance.now(), shown:false};
+    var out = document.querySelector('[data-out="'+id+'"]');
+    if(out) out.classList.add('hide');
+    render(id, 0, false);
+  }
+
+  function frame(now){
+    for(var id in state){
+      var s = state[id], d = DEMOS[id];
+      if(!s || s.shown) continue;
+      var elapsed = now - s.t0;
+      var chars = Math.floor(elapsed / (1000 / d.cps));
+      var total = full(id).length;
+      if(chars >= total){
+        render(id, total, true);
+        if(elapsed > (total * (1000/d.cps)) + 550){
+          var out = document.querySelector('[data-out="'+id+'"]');
+          if(out) out.classList.remove('hide');
+          s.shown = true;
+        }
+      } else {
+        render(id, chars, false);
+      }
+    }
+    requestAnimationFrame(frame);
+  }
+  requestAnimationFrame(frame);
+
+  /* Start each demo when it first scrolls into view, so the typing is not
+     already finished before anyone looks at it. */
+  var seen = {};
+  if('IntersectionObserver' in window){
+    var io = new IntersectionObserver(function(entries){
+      entries.forEach(function(e){
+        var id = e.target.getAttribute('data-demo');
+        if(e.isIntersecting && !seen[id]){ seen[id] = 1; start(id); }
+      });
+    }, {threshold:.35});
+    document.querySelectorAll('[data-demo]').forEach(function(n){ io.observe(n); });
+  } else {
+    Object.keys(DEMOS).forEach(start);
+  }
+
+  document.querySelectorAll('[data-replay]').forEach(function(b){
+    b.addEventListener('click', function(){ start(b.getAttribute('data-replay')); });
+  });
+})();
+</script>
+</body>
+</html>

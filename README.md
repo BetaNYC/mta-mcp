@@ -1,5 +1,26 @@
 # mta-mcp
 
+> # ⚠️ Alpha. v0.1.0.
+>
+> **This is early code, shared to find out what breaks.** It is in active
+> development, it has not been used in anger by anyone outside BetaNYC, and
+> **tool names, parameters, and response shapes can change without notice.**
+> Do not build anything you care about on this yet.
+>
+> Specifically not settled:
+>
+> - **Only the subway alerts feed has been inspected.** Bus, Long Island Rail
+>   Road, and Metro-North alerts are untested and may not share the same
+>   conventions. MTA claims they do; we have already found one place that claim
+>   does not hold.
+> - **The effect classification covers 11 `alert_type` values** observed across
+>   two live pulls. MTA can emit others. An unrecognized one is treated as a
+>   disruption on purpose, but that is a safety net, not coverage.
+> - **Tested against a handful of real dates and stations**, not a broad corpus.
+>
+> Found something wrong? [Open an issue](https://github.com/BetaNYC/mta-mcp/issues).
+> That is the point of sharing it this early.
+
 An [MCP (Model Context Protocol)](https://modelcontextprotocol.io/) server for
 **MTA subway service alerts** — planned weekend work, suspensions, reroutes, and
 elevator and escalator outages.
