@@ -5,6 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>mta-mcp — subway service alerts for AI assistants</title>
 <meta name="description" content="An MCP server that answers one question: is the subway line we recommend disrupted on that date, at that station? Built by BetaNYC.">
+<link rel="icon" type="image/svg+xml" href="img/mcp-bullet.svg">
+<meta property="og:title" content="mta-mcp — subway service alerts for AI assistants">
+<meta property="og:description" content="Alpha. Is the subway line we recommend disrupted on that date, at that station? Built by BetaNYC.">
+<meta name="twitter:card" content="summary">
 <style>
 /* BetaNYC brand tokens — archive/betanyc/brand.md, finalized 2026-05-06.
    Poppins/Roboto are the brand faces but cannot travel in a zero-dependency
@@ -30,6 +34,12 @@ p{margin:0 0 16px} a{color:var(--blue)}
 code,kbd{font-family:var(--mono);font-size:.88em}
 
 header{background:var(--bg-blue);border-bottom:1px solid var(--border);padding:52px 0 40px}
+.hero{display:flex;gap:28px;align-items:flex-start}
+.hero-mark{flex:0 0 auto;width:clamp(84px,13vmin,140px);height:auto}
+@media(max-width:620px){
+  .hero{flex-direction:column;gap:16px}
+  .hero-mark{width:84px}
+}
 .tag{display:inline-block;font-size:13px;font-weight:700;letter-spacing:.06em;
      text-transform:uppercase;color:var(--blue);margin-bottom:10px}
 .lede{font-size:clamp(17px,2.3vmin,21px);max-width:62ch}
@@ -119,6 +129,10 @@ Tool shapes can change without notice.
 
 <header>
   <div class="wrap">
+    <div class="hero">
+      <img class="hero-mark" src="img/mcp-bullet.svg" width="200" height="200"
+           alt="MCP, set in white on a BetaNYC-blue circle">
+      <div>
     <span class="tag">BetaNYC · civic tech, open source</span>
     <h1>mta-mcp</h1>
     <p class="lede">An <a href="https://modelcontextprotocol.io/">MCP</a> server that answers one
@@ -128,6 +142,8 @@ Tool shapes can change without notice.
     means that exact call was run and that is what came back.
     <span class="badge i">Illustrative</span> means it shows the shape of an answer, not live values.
     <br><strong>MTA's feed moves.</strong> A verified panel is a photograph, not a window.</p>
+      </div>
+    </div>
   </div>
 </header>
 
@@ -288,8 +304,9 @@ code rather than in a comment somebody later deletes.</p>
 
 <div class="note"><b>The same terms bind the output.</b> No claim that the data is accurate,
 complete, or timely. A visible as-of timestamp on anything cached. And MTA route bullets are
-licensed intellectual property, separate from the free data terms, so this page and every response
-write "the 6 train" rather than reproducing a roundel.</div>
+licensed intellectual property, separate from the free data terms. So this page and every
+response write "the 6 train" rather than reproducing a route indicator. The circle at the top of
+this page is not one: there is no MCP train, and no MTA mark is reproduced in it.</div>
 
 <h2>Running it</h2>
 

@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"
+     width="200" height="200" role="img" aria-labelledby="t d">
+  <title id="t">MCP</title>
+  <desc id="d">A BetaNYC-blue circle with the letters M C P in white.</desc>
+
+  <!-- BetaNYC Blue #2359a8 (archive/betanyc/brand.md, finalized 2026-05-06).
+       Deliberately NOT an MTA route indicator: MCP is not a subway route and
+       no MTA mark is reproduced here. -->
+  <circle cx="100" cy="100" r="100" fill="#2359a8"/>
+
+  <!-- Letters are drawn as stroked geometry rather than set in type, so the
+       mark needs no webfont and renders identically on every platform. -->
+  <g fill="none" stroke="#fff" stroke-width="16"
+     stroke-linecap="butt" stroke-linejoin="miter">
+    <path d="M27 136 V64 L50 106 L73 64 V136"/>
+    <path d="M128 80 A26 26 0 1 0 128 120"/>
+    <path d="M153 136 V64 A20 20 0 0 1 153 104"/>
+  </g>
+</svg>
