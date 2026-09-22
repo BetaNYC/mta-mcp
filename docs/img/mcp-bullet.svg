@@ -8,12 +8,17 @@
        no MTA mark is reproduced here. -->
   <circle cx="100" cy="100" r="100" fill="#2359a8"/>
 
-  <!-- Letters are drawn as stroked geometry rather than set in type, so the
-       mark needs no webfont and renders identically on every platform. -->
-  <g fill="none" stroke="#fff" stroke-width="16"
+  <!-- Letters are stroked geometry rather than type, so the mark needs no
+       webfont and renders identically on every platform.
+
+       Laid out to keep every stroke corner well inside the circle: the
+       outermost corner sits ~80 from center against a radius of 100, which
+       leaves visible padding at favicon size. An earlier pass ran the letters
+       from x=27 to x=173 and they crowded the edge. -->
+  <g fill="none" stroke="#fff" stroke-width="15"
      stroke-linecap="butt" stroke-linejoin="miter">
-    <path d="M27 136 V64 L50 106 L73 64 V136"/>
-    <path d="M128 80 A26 26 0 1 0 128 120"/>
-    <path d="M153 136 V64 A20 20 0 0 1 153 104"/>
+    <path d="M34 132 V68 L55 104 L76 68 V132"/>
+    <path d="M116 82 A23 23 0 1 0 116 118"/>
+    <path d="M144 132 V68 A17 17 0 0 1 144 102"/>
   </g>
 </svg>
