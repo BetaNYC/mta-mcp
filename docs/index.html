@@ -402,12 +402,96 @@ above answers about now. None of them accepts a future date, and none of them se
 that got <em>worse</em> from service that got <em>better</em> at a station. That gap is the only
 reason this exists.</p>
 
+<h2>Community</h2>
+
+<p>Three different questions, three different places. Sending one to the wrong place mostly wastes
+your time, so here is the routing.</p>
+
+<table>
+  <tr><th>Your question</th><th>Where it goes</th></tr>
+  <tr>
+    <td>A tool returns the wrong shape, a schema is wrong, this server crashes</td>
+    <td><a href="https://github.com/BetaNYC/mta-mcp/issues">Our issue tracker</a><br>
+        <span class="small">Especially while this is alpha. Include the <code>entity_id</code> from
+        the response if it is an alert-matching question; it makes the alert findable in the raw
+        feed.</span></td>
+  </tr>
+  <tr>
+    <td>A feed field is undocumented, an alert looks wrong, MTA's API behaves oddly</td>
+    <td><a href="https://groups.google.com/g/mtadeveloperresources"><strong>MTA Developer
+        Google Group</strong></a><br>
+        <span class="small">MTA has no dedicated developer support team but actively monitors this
+        group. Asking there rather than in our tracker gets you a better answer and helps everyone
+        else building against the same feeds. It is also where we would take the two open questions
+        in "what we could not verify" above.</span></td>
+  </tr>
+  <tr>
+    <td>You want to build civic tech in New York with other people</td>
+    <td><a href="https://beta.nyc/betabuilders/"><strong>BetaBuilders</strong></a><br>
+        <span class="small">BetaNYC's community, below.</span></td>
+  </tr>
+</table>
+
+<h3>BetaBuilders</h3>
+
+<p>In BetaNYC's own words, <em>"a BetaBuilder is a New Yorker who sustains the city's civic
+infrastructure."</em> The <strong>BetaNYC Discord</strong> is where classes, fellowships, and open
+data work get planned, where projects and job openings get posted, and where a tool like this one
+gets argued about before it is any good.</p>
+
+<p>Membership is earned rather than bought, and there are several doors:</p>
+
+<ul class="tight">
+  <li><strong>Show up.</strong> Attending a class or registering for a flagship event earns
+      90 days of access at no cost. This is a real door, not a consolation prize.</li>
+  <li><strong>Give monthly.</strong> $5 a month funds School of Data, Mapping for Equity, Open Data
+      Week, CityCamp NYC, and the weekly newsletter.</li>
+  <li><strong>Serve.</strong> Fellows, alumni, Open Data Ambassadors, volunteers, working-group
+      members, and community partners are invited directly.</li>
+  <li><strong>Scholarships.</strong> If cost is the obstacle, say so. BetaNYC's Code of Conduct
+      commits to prioritizing access for people traditionally excluded from civic work.</li>
+</ul>
+
+<div class="note"><b>Most of it never goes behind a membership.</b> The weekly newsletter, public
+events, classes, every open data resource, and all the research stay free. That includes this
+server. Membership buys the room, not the work.</div>
+
+<p><a href="https://beta.nyc/betabuilders/"><strong>Read the full thing and pick a door →</strong></a></p>
+
 <h2>Credits</h2>
 <p>Data from the <a href="https://api.mta.info/#/serviceAlerts">MTA service alerts feed</a>,
 free to use under MTA's terms. Station names from MTA's published static GTFS. MTA's own
 implementation notes live at
 <a href="https://github.com/nymta/gtfs-documentation">nymta/gtfs-documentation</a>, which is
 sparse but is the only first-party source for how these feeds actually behave.</p>
+<h3>About BetaNYC</h3>
+
+<p>This is built and maintained by <a href="https://beta.nyc"><strong>BetaNYC</strong></a>, New
+York's civic technology and open-data community. We work to improve lives in New York through
+civic design, technology, data, and public-interest technology.</p>
+
+<table>
+  <tr><th>Where to look</th><th>What is there</th></tr>
+  <tr><td><a href="https://beta.nyc/about/">About BetaNYC</a></td>
+      <td>Who we are, the team, and how the organization is structured.</td></tr>
+  <tr><td><a href="https://beta.nyc/our-work/">Our work</a></td>
+      <td>Programs, research, and the open-data work this tool exists to support.</td></tr>
+  <tr><td><a href="https://beta.nyc/events/">Events calendar</a></td>
+      <td>What is coming up. Attending a class is also one of the doors into
+          <a href="https://beta.nyc/betabuilders/">BetaBuilders</a>.</td></tr>
+  <tr><td><a href="https://www.schoolofdata.nyc/">NYC School of Data</a></td>
+      <td>Our annual open-data conference, free and open to the public.</td></tr>
+  <tr><td><a href="https://citycamp.nyc">CityCamp NYC</a></td>
+      <td>The unconference where New Yorkers and city government work on civic problems together.
+          Getting people there is the reason this server was built.</td></tr>
+  <tr><td><a href="https://github.com/BetaNYC">github.com/BetaNYC</a></td>
+      <td>Everything else we publish, including seven MCP servers for NYC civic data that
+          <em>are</em> on npm.</td></tr>
+</table>
+
+<p>These tools are free and open source. If you want to help keep the work going,
+<a href="https://beta.nyc/donate">donating</a> is the most direct way.</p>
+
 <p class="small"><strong>Link note.</strong> Every outbound link on this page was HTTP-checked on
 2026-09-21. The <code>mta.info</code> and <code>claude.ai</code> links return 403 to a command-line
 request because of bot protection, not because they are dead; both were confirmed in a real
