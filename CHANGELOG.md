@@ -72,6 +72,9 @@ This package is not published to npm. Version numbers track the local build. See
 
 ### Changed
 
+- The data.ny.gov snapshots are refreshed when needed, not on a schedule.
+  The docs now say to check the snapshot's pulled date and run
+  `npm run accessibility-data` before relying on an answer for an event.
 - `get_accessibility_outages` with a `stop_id` returns different rows than
   before in 13 station-row pairings in the saved feeds, all moved to
   `other_station_outages`, because MTA's inventory places that equipment at

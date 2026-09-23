@@ -476,7 +476,9 @@ npm run accessibility-data  # rebuild the ADA status and equipment inventory
 
 The ADA status and equipment inventory are snapshots too, from data.ny.gov.
 MTA posts station ADA status as needed, so a newly accessible station can
-lag. See [docs/data-sources.md](docs/data-sources.md).
+lag. We refresh them when we need them, not on a schedule: before relying on
+an answer for an event, run `npm run accessibility-data`. See
+[docs/data-sources.md](docs/data-sources.md).
 
 Some stations serve more routes than the subway map shows. `628`
 (68 St–Hunter College) returns `4`, `6`, and `6X`, because the 4 runs local
