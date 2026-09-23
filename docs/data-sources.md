@@ -261,5 +261,7 @@ ADA row, that every equipment code in the saved outage feeds is placed at a
 station, and that the field names haven't changed. Review the diff: each
 record is on its own line, so a refresh shows only what changed.
 
-A reasonable cadence is monthly, and whenever MTA announces a newly accessible
-station.
+There's no schedule. Refresh when you need current data: before relying on an
+answer for an event or a publication, or when MTA announces a newly accessible
+station. Every answer that uses a snapshot says when it was pulled, so check
+that date first.

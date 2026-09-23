@@ -81,7 +81,9 @@ can strand someone who uses a wheelchair.
   "northbound" or "southbound" to a rider.
   It's per station, not per complex: at 14 St-Union Sq the 4/5/6 station is
   not accessible and the others are. It's a dated snapshot, and it says a
-  station has an accessible path, not that the path works today.
+  station has an accessible path, not that the path works today. The answer
+  says when the snapshot was pulled. If it's old and the answer matters, such
+  as event directions, suggest running `npm run accessibility-data` first.
 - **No outage isn't proof the station is usable.** Never write "the elevators
   are working." Write what MTA lists, and when you checked.
 - **Use `stop_id`.** Rows are then placed by equipment ID from MTA's inventory,
