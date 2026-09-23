@@ -44,7 +44,7 @@ MTA publishes no rate limit and no refresh cadence, and its responses carry no `
 Please don't add a code path that skips any of them. In particular:
 
 - **No background polling, prefetch, warm-up fetch, or cron.** The server fetches only when a tool is called.
-- **No fetching static GTFS at runtime.** `scripts/update-stations.mjs` generates `data/stations.json` offline, and station lookup makes no network calls.
+- **No fetching static GTFS or data.ny.gov at runtime.** `scripts/update-stations.mjs` generates `data/stations.json`, and `scripts/update-accessibility-data.mjs` generates `data/station_ada.json` and `data/equipment.json`, all offline. Station lookup, ADA status, and alternate routes make no network calls. See [docs/data-sources.md](docs/data-sources.md).
 - **No network access in tests.** The suite runs against fixtures in `test/fixtures/`. That keeps the tests correct and lets CI run on every push without touching MTA.
 
 ### Build against documentation

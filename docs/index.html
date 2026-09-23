@@ -53,6 +53,7 @@ header{background:var(--bg-blue);border-bottom:1px solid var(--border);padding:5
        border-radius:2px;vertical-align:middle;white-space:nowrap}
 .badge.v{background:#e8f4ec;border-color:var(--good);color:var(--good)}
 .badge.i{background:var(--light);border-color:var(--border);color:var(--body)}
+.badge.s{background:var(--bg-blue);border-color:var(--blue);color:var(--blue)}
 
 .demo{border:1px solid var(--border);border-radius:2px;margin:22px 0;background:var(--white)}
 .demo-head{display:flex;flex-wrap:wrap;gap:10px;align-items:center;justify-content:space-between;
@@ -63,6 +64,11 @@ header{background:var(--bg-blue);border-bottom:1px solid var(--border);padding:5
 .col{padding:16px}
 .col+.col{border-left:1px solid var(--border)}
 @media(max-width:760px){.col+.col{border-left:0;border-top:1px solid var(--border)}}
+/* Worked examples stack call, answer, and verdict top to bottom, because the
+   JSON is too wide to sit in half a column. */
+.stack .col+.col{border-left:0;border-top:1px solid var(--border)}
+.stack pre{margin:0;white-space:pre}
+.col-sub{font-size:14px;margin:0 0 10px}
 .col-h{font-family:var(--mono);font-size:11px;font-weight:700;letter-spacing:.07em;
        text-transform:uppercase;color:var(--body);margin-bottom:10px}
 .byhand{background:var(--light)}
@@ -101,6 +107,9 @@ header{background:var(--bg-blue);border-bottom:1px solid var(--border);padding:5
 table{border-collapse:collapse;width:100%;font-size:15px;margin:16px 0}
 th,td{border:1px solid var(--border);padding:8px 11px;text-align:left;vertical-align:top}
 th{background:var(--bg-blue);color:var(--blue)}
+/* Tables scroll inside their own box on a phone instead of widening the page. */
+.table-scroll{overflow-x:auto;margin:16px 0}
+.table-scroll table{margin:0}
 pre{background:var(--light);border:1px solid var(--border);border-radius:2px;
     padding:13px 15px;overflow-x:auto;font-size:13px;line-height:1.5}
 /* Alpha banner — sticky so it cannot be scrolled past. This is early code and
@@ -141,7 +150,10 @@ Tool names and response shapes may change without notice.
     <p class="hdr-meta">Every demo below is badged. <span class="badge v">Verified 2026-09-21</span>
     means that exact call was run and that is what came back.
     <span class="badge i">Illustrative</span> means it shows the shape of an answer, not live values.
-    <br>MTA's feed changes, so a verified panel shows what came back on that date.</p>
+    <span class="badge s">Saved feed</span> means we ran the tool on our own machine against
+    copies of MTA's feeds saved in the repo, with no live request. The answer is real for those
+    copies, and each panel says when they were saved.
+    <br>MTA's feed changes, so a verified or saved-feed panel shows what came back on that date.</p>
       </div>
     </div>
   </div>
@@ -184,13 +196,13 @@ to get wrong.</p>
           <dt>match_count</dt><dd>4</dd>
           <dt>unambiguous</dt><dd class="f">false</dd>
         </dl>
-        <table>
+        <div class="table-scroll"><table>
           <tr><th>stop_id</th><th>routes</th></tr>
           <tr><td><code>116</code></td><td>1</td></tr>
           <tr><td><code>225</code></td><td>2, 3</td></tr>
           <tr><td><code>621</code></td><td>4, 5, 6, 6X</td></tr>
           <tr><td><code>A15</code></td><td>A, B, C, D</td></tr>
-        </table>
+        </table></div>
         <div class="verdict"><strong>It doesn't guess.</strong> 193 of 496 stations share a
         name with another. Pass <code>route_id</code> to narrow it, or pick a
         <code>stop_id</code>.</div>
@@ -236,13 +248,13 @@ so this answer holds until MTA renames a station.</div>
           <dt>alert_count</dt><dd>2</dd>
           <dt>station_level_detail</dt><dd class="f">false</dd>
         </dl>
-        <table>
+        <div class="table-scroll"><table>
           <tr><th>alert</th><th>effect</th><th>counts as disruption</th></tr>
           <tr><td>Planned&nbsp;-&nbsp;Express to Local<br><span class="small">tags your station</span></td>
               <td><code>added_at_local_stops</code></td><td class="t">no</td></tr>
           <tr><td>Planned&nbsp;-&nbsp;Stops Skipped<br><span class="small">names no stations</span></td>
               <td><code>reduced</code></td><td class="n">yes</td></tr>
-        </table>
+        </table></div>
         <div class="verdict"><strong>One answer covers both alerts.</strong> The express-to-local
         alert tags 68 St and doesn't count as a disruption, because running local means
         more trains stop there. The second alert names no stations, so the tool won't
@@ -258,11 +270,209 @@ in any alert?"</em> reports a disruption here that doesn't exist, because the al
 tells added service apart from reduced service. This server classifies on MTA's
 <code>alert_type</code> instead.</div>
 
+<h2 id="how-to-use">How to use it</h2>
+
+<p>Once it's installed (see <a href="#running-it">Running it</a>), you don't call the tools
+yourself. You ask Claude a question in plain English, and Claude picks a tool and fills in the
+arguments. It works best when the question names a line, a station, and a date.</p>
+
+<h3>Try asking</h3>
+
+<p><span class="badge i">Illustrative</span> Claude chooses the tool, so the call it makes may
+differ a little from the one shown. The tool names and parameters are the current ones.</p>
+
+<div class="table-scroll"><table>
+  <tr><th scope="col">You ask</th><th scope="col">The tool Claude would likely call</th></tr>
+  <tr><td>"Is the 6 train running normally to 68 St–Hunter College on Saturday, October 3?
+          It's for our event."</td>
+      <td><code>check_route_on_date</code><br>
+          <code>{"route_id": "6", "date": "2026-10-03", "station": "68 St-Hunter College"}</code></td></tr>
+  <tr><td>"What's happening on the 6 train this weekend?"</td>
+      <td><code>get_service_alerts</code>, once per day<br>
+          <code>{"route_id": "6", "date": "2026-09-26"}</code></td></tr>
+  <tr><td>"Our flyer says 125 St. Which station is that?"</td>
+      <td><code>resolve_station</code><br>
+          <code>{"query": "125 St"}</code><br>
+          <span class="small">Four stations match, so it asks you which one.</span></td></tr>
+  <tr><td>"Are any elevators out at 161 St–Yankee Stadium on the 4 train on September 26? If so,
+          what's the way around?"</td>
+      <td><code>get_accessibility_outages</code><br>
+          <code>{"stop_id": "414", "route_id": "4", "date": "2026-09-26"}</code><br>
+          <span class="small">The way around is MTA's <code>alternative_route</code> text.</span></td></tr>
+  <tr><td>"Is 14 St–Union Sq accessible on the 6 train?"</td>
+      <td><code>resolve_station</code><br>
+          <code>{"query": "14 St-Union Sq", "route_id": "6"}</code><br>
+          <span class="small">ADA status is per station. The 4, 5, and 6 station there is listed
+          as not accessible, and the L and N, Q, R, W stations as fully accessible.</span></td></tr>
+  <tr><td>"Check the 6 train and the elevators at 68 St–Hunter College for October 3."</td>
+      <td><code>check_route_on_date</code><br>
+          <code>{"route_id": "6", "date": "2026-10-03", "station": "68 St-Hunter College",
+          "include_accessibility": true}</code></td></tr>
+  <tr><td>"What elevator outages are scheduled on the 7 train?"</td>
+      <td><code>get_accessibility_outages</code><br>
+          <code>{"route_id": "7", "upcoming": true}</code></td></tr>
+  <tr><td>"Our flyer says 'take the 6 train to 68 St.' Should we add a travel warning for
+          October 3?"</td>
+      <td><code>check_route_on_date</code> with <code>include_accessibility: true</code>, as above.
+          <br><span class="small">Claude reads <code>disrupted</code>,
+          <code>station_level_detail</code>, and MTA's own wording for when a change applies,
+          and should tell you to confirm at mta.info closer to the date.</span></td></tr>
+</table></div>
+
+<p>If a station name matches more than one station, the tool returns the candidates instead of
+guessing, and Claude should ask you which one you meant.</p>
+
+<h3>Worked example: a travel note for an event</h3>
+
+<div class="demo">
+  <div class="demo-head">
+    <span class="demo-q">"We're at 68 St–Hunter College on Saturday, September 19. Is the 6 train
+    OK, and are any elevators out?"</span>
+    <span class="badge s">Saved feed</span>
+  </div>
+  <div class="stack">
+    <div class="col">
+      <div class="col-h">The call</div>
+      <pre tabindex="0"><code>check_route_on_date({
+  "route_id": "6",
+  "date": "2026-09-19",
+  "stop_id": "628",
+  "include_accessibility": true
+})</code></pre>
+    </div>
+    <div class="col">
+      <div class="col-h">What came back, trimmed</div>
+      <p class="col-sub small">Service alerts feed timestamped 2026-09-16, elevator feed saved
+      2026-09-17, station ADA snapshot pulled 2026-09-22. Provenance fields and the alert's
+      full text are cut here.</p>
+      <pre tabindex="0"><code>{
+  "route_id": "6",
+  "date": "2026-09-19",
+  "disrupted": false,
+  "station": {
+    "stop_id": "628",
+    "stop_name": "68 St-Hunter College",
+    "routes": ["4", "6", "6X"],
+    "accessibility": { "status": "fully_accessible", "mta_notes": null }
+  },
+  "station_level_detail": true,
+  "alert_count": 1,
+  "alerts": [{
+    "alert_type": "Planned - Part Suspended",
+    "effect": "reduced",
+    "header_text": "No [6] between Hunts Point Av and 125 St",
+    "human_readable_active_period": "Sep 18 - Oct 19, Fri 9:30 PM to Mon 5:00 AM",
+    "affected_stops": [
+      { "stop_id": "614", "stop_name": "Longwood Av" },
+      …five more Bronx stations…
+    ],
+    "affects_this_station": false,
+    "relevant_to_station": false
+  }],
+  "accessibility_outages": {
+    "outage_count": 0,
+    "outages": [],
+    "note": "… No outage is listed here. A missing outage is not proof
+      the station is usable: the feed can lag, and an outage MTA hasn't
+      entered won't show. Confirm at
+      https://www.mta.info/elevator-escalator-status before travel."
+  },
+  "disclaimer": "Unofficial. BetaNYC is not the MTA …"
+}</code></pre>
+    </div>
+    <div class="col">
+      <div class="col-h">What Claude can tell you from it</div>
+      <div class="verdict">The one alert on the 6 that weekend is in the Bronx, between Hunts
+      Point Av and 125 St, and MTA didn't tag 68 St, so <code>disrupted</code> is false for this
+      station. Guests coming from the Bronx on the 6 would still hit the gap, and MTA's alert
+      text says free shuttle buses cover it. MTA lists the station as fully accessible, and no
+      elevator outage was listed that day. That isn't proof the elevators work, so a flyer
+      should still say to check mta.info before traveling.</div>
+    </div>
+  </div>
+</div>
+
+<h3>Worked example: elevators and the way around</h3>
+
+<div class="demo">
+  <div class="demo-head">
+    <span class="demo-q">"Are any elevators out at 161 St–Yankee Stadium on the 4 train on Saturday,
+    September 26?"</span>
+    <span class="badge s">Saved feed</span>
+  </div>
+  <div class="stack">
+    <div class="col">
+      <div class="col-h">The call</div>
+      <pre tabindex="0"><code>get_accessibility_outages({
+  "stop_id": "414",
+  "route_id": "4",
+  "date": "2026-09-26"
+})</code></pre>
+    </div>
+    <div class="col">
+      <div class="col-h">What came back, trimmed</div>
+      <p class="col-sub small">Elevator feed saved 2026-09-17. Station ADA and equipment
+      inventory snapshots pulled 2026-09-22. The last of five outages shown, and MTA's alternate
+      route text is cut.</p>
+      <pre tabindex="0"><code>{
+  "date": "2026-09-26",
+  "query": "161 St-Yankee Stadium",
+  "stop_id": "414",
+  "route_id": "4",
+  "station_accessibility": { "status": "fully_accessible", "mta_notes": null },
+  "outage_count": 5,
+  "date_caveats": [],
+  "outages": [
+    …four more elevators…
+    {
+      "station": "161 St-Yankee Stadium",
+      "trainno": "B/D/4",
+      "equipment": "EL133",
+      "equipmenttype": "EL",
+      "serving": "mezzanine to Manhattan-bound 4 platform",
+      "ADA": "Y",
+      "outagedate": "11/06/2024 09:00:00 AM",
+      "estimatedreturntoservice": "09/30/2026 11:59:00 PM",
+      "reason": "Capital Replacement",
+      "matched_by": "name",
+      "match_note": "MTA's equipment inventory places EL133 at 161 St-Yankee Stadium (D11), another station in this complex. The outage feed's station name fits this station too, so it is listed here.",
+      "inventory": {
+        "stop_ids": ["D11"],
+        "ada_compliant": "YES",
+        "redundant_elevator": "-",
+        "alternative_route": "To access street level: Take a Manhattan-bound
+          4 to 125 St. Use elevators to transfer to a Bronx-bound 6. Exit at
+          Hunts Point Av and transfer to a Washington Heights-bound Bx6-SBS
+          bus to E 161 St and River Av. …"
+      }
+    }
+  ]
+}</code></pre>
+    </div>
+    <div class="col">
+      <div class="col-h">What Claude can tell you from it</div>
+      <div class="verdict">MTA lists this station as fully accessible, and on this saved feed
+      five of its elevators are out, three of them with an estimated return of January 31, 2027.
+      This is why the ADA status alone can't tell you a station is usable. Each outage carries
+      MTA's own alternate route. Read those carefully: the one above sends riders to the 6 train
+      between 125 St and Hunts Point Av, and the saved alerts feed shows no 6 train on that
+      stretch that weekend. The return dates are MTA's estimates. Confirm at
+      <a href="https://www.mta.info/elevator-escalator-status">MTA's elevator and escalator
+      status page</a> before you send anyone.</div>
+    </div>
+  </div>
+</div>
+
+<p>Every parameter and every field in every answer is in the
+<a href="https://github.com/BetaNYC/mta-mcp/blob/main/docs/tools.md">tool reference</a>. The
+elevator, escalator, and ADA data, and where it falls short, are in
+<a href="https://github.com/BetaNYC/mta-mcp/blob/main/docs/accessibility.md">docs/accessibility.md</a>.</p>
+
 <h2>What it cannot do</h2>
 
 <p>Questions this server can't answer:</p>
 
-<table>
+<div class="table-scroll"><table>
   <tr><th>Not this</th><th>Why</th></tr>
   <tr><td>"When is the next 6 train?"</td>
       <td>No arrivals or trip updates. Those are protobuf-only feeds and would pull in three
@@ -273,14 +483,16 @@ tells added service apart from reduced service. This server classifies on MTA's
   <tr><td>"Are Times Sq and Port Authority connected?"</td>
       <td>Stations linked only by transfer, under different names, are not modeled. 60 such pairs
           exist. Asking about one name will not surface alerts filed against the other.</td></tr>
-  <tr><td>"Is this station accessible?"</td>
-      <td>Not yet. The station list doesn't include accessibility status. MTA's
+  <tr><td>"Can I get step-free to the platform today?"</td>
+      <td>Only in part. Each station carries MTA's ADA status, and elevator outages come with
+          MTA's alternate route, but the status is a dated snapshot and a missing outage is not
+          proof the station is usable. Confirm on MTA's
           <a href="https://www.mta.info/elevator-escalator-status">elevator and escalator status
-          page</a> does.</td></tr>
+          page</a>.</td></tr>
   <tr><td>"Is my station definitely fine?"</td>
       <td>MTA tags stations only when it considers the change significant. Every response carries
           <code>station_level_detail</code> so a quiet answer is never mistaken for a guarantee.</td></tr>
-</table>
+</table></div>
 
 <h2>Why this is not on npm</h2>
 
@@ -312,7 +524,7 @@ bullets are licensed separately from the free data, so this page and every respo
 "the 6 train" instead. The blue circle at the top of this page is the MCP logo, not an MTA
 mark.</div>
 
-<h2>Running it</h2>
+<h2 id="running-it">Running it</h2>
 
 <div class="alpha-box">
   <h3>⚠️ Read this before you install it</h3>
@@ -333,13 +545,17 @@ mark.</div>
   <a href="https://github.com/BetaNYC/mta-mcp/issues">Open an issue.</a></p>
 </div>
 
-<p>Clone and build. You need Node 18 or newer, and no API key.</p>
+<h3>1. Clone and build</h3>
+
+<p>You need Node 18 or newer, and no API key.</p>
 
 <pre>git clone https://github.com/BetaNYC/mta-mcp.git
 cd mta-mcp
 npm install    # also builds</pre>
 
-<p>Then point an MCP client at the build. For Claude Code, in <code>.mcp.json</code>:</p>
+<h3>2. Point your AI app at the build</h3>
+
+<p>For Claude Code, in a project's <code>.mcp.json</code>:</p>
 
 <pre>{
   "mcpServers": {
@@ -349,6 +565,27 @@ npm install    # also builds</pre>
     }
   }
 }</pre>
+
+<p>For Claude Desktop, in <code>claude_desktop_config.json</code>. Claude Desktop doesn't expand
+<code>${HOME}</code>, so use the full path to your copy:</p>
+
+<pre>{
+  "mcpServers": {
+    "mta-mcp": {
+      "command": "node",
+      "args": ["/absolute/path/to/mta-mcp/dist/index.js"]
+    }
+  }
+}</pre>
+
+<h3>3. Ask a question</h3>
+
+<p>Restart the app and ask something from <a href="#how-to-use">Try asking</a>, like
+<em>"Is the 6 train running normally to 68 St–Hunter College on Saturday?"</em></p>
+
+<p class="small">Using Claude Code and want to keep conversations lighter? The same tools also
+come as a skill, with no MCP server to run. See
+<a href="https://github.com/BetaNYC/mta-mcp/blob/main/skills/README.md">skills/README.md</a>.</p>
 
 <h3>Being gentle with a public feed</h3>
 <p>MTA publishes no rate limit, no refresh cadence, and no cache headers, so the server sets its
@@ -380,7 +617,7 @@ called. The test suite makes no network requests, so continuous integration neve
 and all of them do <strong>live arrivals</strong>, which this server doesn't. If your question is
 "when is the next train," start with one of these.</p>
 
-<table>
+<div class="table-scroll"><table>
   <tr>
     <th>Project</th><th>Language</th><th>What it does that this one does not</th>
   </tr>
@@ -413,7 +650,7 @@ and all of them do <strong>live arrivals</strong>, which this server doesn't. If
     <td>Next-train arrivals by station and direction. Small and readable, which makes it a good
         first thing to look at if you are learning how these fit together.</td>
   </tr>
-</table>
+</table></div>
 
 <p><strong>What this server adds:</strong> it takes a <em>date</em>. The servers above answer
 about right now. Of the four, none documents a date parameter in its README, and none says it
@@ -424,7 +661,7 @@ server fills.</p>
 
 <p>Where to take your question:</p>
 
-<table>
+<div class="table-scroll"><table>
   <tr><th>Your question</th><th>Where it goes</th></tr>
   <tr>
     <td>A tool returns the wrong shape, a schema is wrong, this server crashes</td>
@@ -447,7 +684,7 @@ server fills.</p>
     <td><a href="https://beta.nyc/betabuilders/"><strong>BetaBuilders</strong></a><br>
         <span class="small">BetaNYC's community, below.</span></td>
   </tr>
-</table>
+</table></div>
 
 <h3>BetaBuilders</h3>
 
@@ -487,7 +724,7 @@ MTA's developer pages.</p>
 We're New York's civic technology and open data community, and we work to improve lives in New
 York through civic design, technology, and data.</p>
 
-<table>
+<div class="table-scroll"><table>
   <tr><th>Where to look</th><th>What is there</th></tr>
   <tr><td><a href="https://beta.nyc/about/">About BetaNYC</a></td>
       <td>Who we are, the team, and how the organization is structured.</td></tr>
@@ -504,7 +741,7 @@ York through civic design, technology, and data.</p>
   <tr><td><a href="https://github.com/BetaNYC">github.com/BetaNYC</a></td>
       <td>Everything else we publish, including seven MCP servers for NYC civic data that
           <em>are</em> on npm.</td></tr>
-</table>
+</table></div>
 
 <p>These tools are free and open source. If you want to help keep the work going,
 <a href="https://beta.nyc/donate">donating</a> is the most direct way.</p>

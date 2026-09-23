@@ -43,8 +43,8 @@ Exposes 4 tools over MCP:
 |---|---|
 | `check_route_on_date` | Is a route disrupted on a date, optionally at one station? The one to use for event planning |
 | `get_service_alerts` | All alerts active on a date, filterable by route, type, and effect |
-| `resolve_station` | Free-text station name to GTFS parent-station id, with the routes serving it |
-| `get_accessibility_outages` | Elevator and escalator outages, current, upcoming, or on a date |
+| `resolve_station` | Free-text station name to GTFS parent-station id, with the routes serving it and its ADA status |
+| `get_accessibility_outages` | Elevator and escalator outages, current, upcoming, or on a date, with MTA's alternate routes |
 
 Every field in every answer is documented in [docs/tools.md](docs/tools.md).
 Elevators and escalators have their own guide, including known gaps:
@@ -61,7 +61,12 @@ It reads two MTA feeds. Neither needs a key.
   escalator outages, as flat JSON
 
 Station names and route membership come from a snapshot of MTA's static GTFS
-that ships with the repo, so looking up a station makes no network call.
+that ships with the repo, so looking up a station makes no network call. Two
+more snapshots come from MTA's datasets on data.ny.gov: each station's ADA
+status, and MTA's elevator and escalator inventory, which places each outage
+at a station by ID and gives its alternate route. Those are under the OPEN-NY
+Terms of Use, and they're never fetched at runtime either. Every source, how
+they join, and their terms: [docs/data-sources.md](docs/data-sources.md).
 
 **Out of scope:** trip updates, vehicle positions, and anything in the
 `nyct%2Fgtfs-*` family. Those feeds are protobuf-only and would need three
@@ -83,10 +88,12 @@ Is a route disrupted on a date, optionally at one station?
 | `date` | string | yes | `YYYY-MM-DD`, in America/New_York time |
 | `stop_id` | string | no | GTFS parent-station id, e.g. `"628"` |
 | `station` | string | no | Station name as free text, matched among the stations `route_id` serves |
+| `include_accessibility` | boolean | no | Also list elevator and escalator outages at the station that day, with MTA's alternate routes. Needs a station. One extra request |
 
 Returns `disrupted`, the matching `alerts`, and a provenance block. Each alert
 carries its classified `effect`, the stops MTA named, and MTA's own
-rider-facing date string.
+rider-facing date string. The station carries MTA's ADA status. Elevator
+outages are included only when you ask, to keep the default answer small.
 
 ```json
 { "route_id": "6", "date": "2026-09-19", "station": "68 St-Hunter College" }
@@ -97,7 +104,12 @@ rider-facing date string.
   "route_id": "6",
   "date": "2026-09-19",
   "disrupted": false,
-  "station": { "stop_id": "628", "stop_name": "68 St-Hunter College", "routes": ["4", "6", "6X"] },
+  "station": {
+    "stop_id": "628",
+    "stop_name": "68 St-Hunter College",
+    "routes": ["4", "6", "6X"],
+    "accessibility": { "status": "fully_accessible", "mta_notes": null }
+  },
   "station_serves_route": true,
   "station_level_detail": true,
   "station_level_detail_note": "Every matching alert names the stations it affects, so the station-level answer rests on MTA's own tagging.",
@@ -169,12 +181,22 @@ serving each. It reads the bundled station list and makes no network call.
   "match_count": 1,
   "unambiguous": true,
   "candidates": [
-    { "stop_id": "621", "stop_name": "125 St", "lat": 40.804138, "lon": -73.937594, "routes": ["4", "5", "6", "6X"], "score": 100 }
+    {
+      "stop_id": "621", "stop_name": "125 St", "lat": 40.804138, "lon": -73.937594,
+      "routes": ["4", "5", "6", "6X"], "score": 100,
+      "accessibility": { "status": "fully_accessible", "mta_notes": null }
+    }
   ]
 }
 ```
 
 Without `route_id`, the same query returns four stations.
+
+`accessibility` is MTA's ADA status for that station: `fully_accessible`,
+`partially_accessible` (with the one direction that is, and MTA's note), or
+`not_accessible`. It's per station, not per complex, and it's a dated
+snapshot. It says a station has an accessible path, not that the path is
+working today.
 
 ### `get_accessibility_outages`
 
@@ -183,7 +205,7 @@ Elevator and escalator outages.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `station` | string | no | Station name as free text, matched loosely |
-| `stop_id` | string | no | GTFS parent-station id. The tool looks up its name, matches loosely, and sets aside rows on other routes |
+| `stop_id` | string | no | GTFS parent-station id. Outages are placed by equipment ID using MTA's inventory, with name matching as a fallback |
 | `route_id` | string | no | Only outages whose `trainno` includes this route. `6X`, `7X`, and `FX` count as `6`, `7`, and `F`; the shuttles `GS`, `FS`, and `H` count as `S` |
 | `date` | string | no | `YYYY-MM-DD`. Outages in effect now or scheduled that overlap that day in New York time. Can't be combined with `upcoming: true` |
 | `upcoming` | boolean | no | `false` (default) for outages in effect now, `true` for scheduled ones |
@@ -192,7 +214,11 @@ Elevator and escalator outages.
 { "stop_id": "A27", "date": "2026-09-26" }
 ```
 
-Returns MTA's outage rows as they are. The fields that matter most:
+Returns MTA's outage rows as they are, each followed by `matched_by` (how it
+was tied to the station), `match_note`, and `inventory`, which holds MTA's
+`alternative_route` for the elevator. With `stop_id`, the answer also has the
+station's ADA status and a `complex_outages` list for other stations in the
+same complex. MTA's fields that matter most:
 
 - `ADA`: `"Y"` if the elevator is part of the station's accessible path. An
   outage on one of these can make the station unusable for someone who can't
@@ -208,19 +234,19 @@ Returns MTA's outage rows as they are. The fields that matter most:
 Please read [docs/accessibility.md](docs/accessibility.md) before relying on
 this tool. In short:
 
-- **A search can still miss outages.** MTA names stations its own way in this
-  feed. We handle the spellings we've seen, like `"Bedford Pk Blvd"` and
-  `"42St/Port Authority-Bus Terminal"`, but new ones can appear. An empty
-  station or route search comes with a `no_match_note`. Read it, and try a
-  short part of the name before saying there are no outages.
+- **No outage isn't the same as usable.** The feed can lag. A station MTA
+  lists as not accessible may have no elevator to report, though some such
+  stations do have ADA-compliant elevators, and the answer names them. An
+  empty answer comes with a `no_match_note` that says so.
+- **Use `stop_id`.** It places rows by equipment ID. A `station` search is by
+  name only, and MTA names stations its own way in this feed. We handle the
+  spellings we've seen, like `"Bedford Pk Blvd"`, but new ones can appear.
+- **The ADA status and alternate routes are dated snapshots.** MTA keeps the
+  alternate routes by hand and says they can lag. Quote them as MTA's, and
+  confirm on [MTA's status page](https://www.mta.info/elevator-escalator-status).
 - **Dates are MTA's estimates.** With `date`, an outage still listed after its
   estimated return counts as ongoing, and `date_caveats` says which rows that
   applies to.
-- **It doesn't say whether a station is accessible at all,** or what the
-  alternate route is. [MTA's status page](https://www.mta.info/elevator-escalator-status)
-  does.
-- **`check_route_on_date` doesn't look at elevators.** For accessible
-  directions, run both tools.
 
 ---
 
@@ -335,6 +361,8 @@ Setup and a fuller comparison: [skills/README.md](skills/README.md).
 
 > Are any elevators out at Jamaica–179 St?
 
+> Is 86 St on the 6 accessible, and are any of its elevators out on Saturday?
+
 > The event flyer says "6 train to 68 St." Should we add a travel warning?
 
 ---
@@ -437,13 +465,18 @@ hasn't mattered yet, and we can add it if it does.
 ### The station list is a dated snapshot
 
 `data/stations.json` is generated from MTA's `gtfs_subway.zip`, which MTA
-updates "typically a few times a year." A new or renamed station won't resolve
+updates a few times a year. A new or renamed station won't resolve
 until the file is regenerated. An unrecognized `stop_id` returns a clear error
 instead of quietly answering for the whole route.
 
 ```bash
-npm run stations    # re-download and rebuild data/stations.json
+npm run stations            # re-download and rebuild data/stations.json
+npm run accessibility-data  # rebuild the ADA status and equipment inventory
 ```
+
+The ADA status and equipment inventory are snapshots too, from data.ny.gov.
+MTA posts station ADA status as needed, so a newly accessible station can
+lag. See [docs/data-sources.md](docs/data-sources.md).
 
 Some stations serve more routes than the subway map shows. `628`
 (68 St–Hunter College) returns `4`, `6`, and `6X`, because the 4 runs local
@@ -486,6 +519,7 @@ npm run build        # tsc
 npm test             # build, then the full suite, with no network access
 npm run smoke        # ONE live request to MTA. Not in npm test, not in CI.
 npm run stations     # regenerate data/stations.json from MTA's static GTFS
+npm run accessibility-data  # regenerate data/station_ada.json and data/equipment.json from data.ny.gov
 ```
 
 The suite runs against saved fixtures in `test/fixtures/` with `fetch` stubbed.
@@ -507,9 +541,13 @@ Layout:
 | `test/helpers/fixture-fetch.mjs` | stands in for `fetch` when the skill tests run the script |
 | `skills/mta-subway/` | the skill: `SKILL.md` and the command-line script |
 | `docs/tools.md` | full tool reference |
-| `docs/accessibility.md` | elevator and escalator guide, with known gaps |
+| `docs/accessibility.md` | elevator, escalator, and station accessibility guide, with known gaps |
+| `docs/data-sources.md` | every data source, how they join, their terms, and how to refresh them |
 | `data/stations.json` | generated station list with route membership |
-| `scripts/update-stations.mjs` | regenerates the above from MTA's static GTFS |
+| `data/station_ada.json` | generated station ADA status, from data.ny.gov `39hk-dx4f` |
+| `data/equipment.json` | generated elevator and escalator inventory, from data.ny.gov `94fv-bak7` |
+| `scripts/update-stations.mjs` | regenerates `data/stations.json` from MTA's static GTFS |
+| `scripts/update-accessibility-data.mjs` | regenerates the two data.ny.gov snapshots |
 | `scripts/smoke.mjs` | the single live request |
 
 Tool schemas reject unknown parameters, with an error that names the bad key
@@ -534,6 +572,12 @@ The terms bind this repo and anything built on it:
 
 MTA can change these terms or shut off the feeds at any time, without notice.
 If you use this for event-day travel, keep a manual fallback.
+
+The station ADA status and the elevator inventory come from MTA's datasets on
+[data.ny.gov](https://data.ny.gov), under the
+[OPEN-NY Terms of Use](https://data.ny.gov/dataset/OPEN-NY-Terms-Of-Use/77gx-ii52),
+a separate document from MTA's feed terms. We bundle dated snapshots with
+their source recorded. Details in [docs/data-sources.md](docs/data-sources.md#terms).
 
 ---
 

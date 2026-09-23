@@ -488,6 +488,263 @@ test("date and upcoming together are rejected, and date is validated", async () 
   assert.match(bad, /expected YYYY-MM-DD/);
 });
 
+// ─── Station accessibility (ADA) ─────────────────────────────────────────────
+
+test("resolve_station candidates carry each station's own ADA status", async () => {
+  // One complex, three answers: at Union Sq the 4/5/6 station (635) is not
+  // accessible while L03 and R20 are. A complex-level status would get 635 wrong.
+  const union = await call("resolve_station", { query: "14 St-Union Sq" });
+  const status = Object.fromEntries(union.candidates.map((c) => [c.stop_id, c.accessibility.status]));
+  assert.deepEqual(status, {
+    "635": "not_accessible",
+    L03: "fully_accessible",
+    R20: "fully_accessible",
+  });
+  assert.match(union.ada_data.source_url, /39hk-dx4f/);
+  assert.match(union.ada_data.note, /not whether that path works today/);
+});
+
+test("partially accessible says which direction, with MTA's note verbatim", async () => {
+  const hoyt = await call("resolve_station", { query: "Hoyt St" });
+  const h = hoyt.candidates.find((c) => c.stop_id === "233");
+  assert.deepEqual(h.accessibility, {
+    status: "partially_accessible",
+    mta_notes: "Outbound only",
+    accessible_direction: "Outbound",
+  });
+  // GTFS calls Court Sq-23 St's Manhattan-bound side "southbound". We use
+  // MTA's rider label instead, never the compass word.
+  const court = await call("resolve_station", { query: "Court Sq-23 St" });
+  assert.deepEqual(court.candidates[0].accessibility, {
+    status: "partially_accessible",
+    mta_notes: "Manhattan-bound only",
+    accessible_direction: "Manhattan",
+  });
+  // MTA's note can be narrower than the direction flag: the local platform only.
+  const eightySix = await call("resolve_station", { query: "86 St", route_id: "6" });
+  assert.deepEqual(eightySix.candidates[0].accessibility, {
+    status: "partially_accessible",
+    mta_notes: "Uptown local only",
+    accessible_direction: "Uptown",
+  });
+  // Fully and not accessible stations carry no direction field.
+  const f01 = await call("resolve_station", { query: "Jamaica-179 St" });
+  assert.deepEqual(f01.candidates[0].accessibility, { status: "fully_accessible", mta_notes: null });
+});
+
+test("check_route_on_date reports the station's ADA status without an extra request", async () => {
+  fetchCount = 0;
+  const previousTtl = process.env.MTA_MCP_CACHE_TTL_MS;
+  process.env.MTA_MCP_CACHE_TTL_MS = "0";
+  try {
+    const result = await call("check_route_on_date", { route_id: "6", date: SAT, stop_id: "628" });
+    assert.equal(fetchCount, 1, "the ADA status is bundled; only the alerts feed is read");
+    assert.equal(result.station.accessibility.status, "fully_accessible");
+    assert.match(result.accessibility_note, /not whether it works on 2026-09-19/);
+    assert.match(result.accessibility_note, /include_accessibility:true/);
+    assert.equal(result.accessibility_outages, null);
+
+    const routeOnly = await call("check_route_on_date", { route_id: "6", date: SAT });
+    assert.equal(routeOnly.accessibility_note, null);
+  } finally {
+    if (previousTtl === undefined) delete process.env.MTA_MCP_CACHE_TTL_MS;
+    else process.env.MTA_MCP_CACHE_TTL_MS = previousTtl;
+  }
+});
+
+// ─── Elevator outages in route checks ────────────────────────────────────────
+
+test("include_accessibility adds the station's outages that day, for one extra request", async () => {
+  fetchCount = 0;
+  const previousTtl = process.env.MTA_MCP_CACHE_TTL_MS;
+  process.env.MTA_MCP_CACHE_TTL_MS = "0";
+  try {
+    const result = await call("check_route_on_date", {
+      route_id: "F",
+      date: "2026-09-28",
+      stop_id: "F01",
+      include_accessibility: true,
+    });
+    assert.equal(fetchCount, 2, "alerts plus the current elevator feed, nothing else");
+    const acc = result.accessibility_outages;
+    assert.equal(acc.feed_url, ENE_CURRENT_URL);
+    assert.deepEqual(acc.outages.map((o) => o.equipment).sort(), ["EL431", "EL432", "EL433"]);
+    assert.ok(acc.outages.every((o) => o.matched_by === "equipment id"));
+    const el433 = acc.outages.find((o) => o.equipment === "EL433");
+    assert.match(el433.alternative_route, /Kew Gardens-Union Tpke/);
+    assert.match(acc.note, /can lag/);
+    assert.match(acc.note, /mta\.info\/elevator-escalator-status/);
+    assert.equal(acc.complex_outages, null, "F01 is not part of a complex");
+    // The route answer itself is unchanged.
+    assert.equal(typeof result.disrupted, "boolean");
+  } finally {
+    if (previousTtl === undefined) delete process.env.MTA_MCP_CACHE_TTL_MS;
+    else process.env.MTA_MCP_CACHE_TTL_MS = previousTtl;
+  }
+});
+
+test("include_accessibility with no outages says that is not proof", async () => {
+  // 238 St (103) is not accessible and has nothing in the feed.
+  const result = await call("check_route_on_date", {
+    route_id: "1",
+    date: SAT,
+    stop_id: "103",
+    include_accessibility: true,
+  });
+  assert.equal(result.accessibility_outages.outage_count, 0);
+  assert.match(result.accessibility_outages.note, /codes no ADA-compliant elevator here, so there may be no elevator/);
+  assert.match(result.accessibility_outages.note, /not proof the station is usable/);
+});
+
+test("include_accessibility needs a station, and an unresolved one fetches nothing", async () => {
+  const noStation = await callExpectingError("check_route_on_date", {
+    route_id: "6",
+    date: SAT,
+    include_accessibility: true,
+  });
+  assert.match(noStation, /include_accessibility needs a station/);
+
+  fetchCount = 0;
+  const previousTtl = process.env.MTA_MCP_CACHE_TTL_MS;
+  process.env.MTA_MCP_CACHE_TTL_MS = "0";
+  try {
+    // The N serves two stations named 86 St; the answer is candidates.
+    const ambiguous = await call("check_route_on_date", {
+      route_id: "N",
+      date: SAT,
+      station: "86 St",
+      include_accessibility: true,
+    });
+    assert.equal(ambiguous.resolved, false);
+    assert.equal(fetchCount, 0);
+    assert.ok(ambiguous.candidates.every((c) => typeof c.accessibility.status === "string"));
+  } finally {
+    if (previousTtl === undefined) delete process.env.MTA_MCP_CACHE_TTL_MS;
+    else process.env.MTA_MCP_CACHE_TTL_MS = previousTtl;
+  }
+});
+
+// ─── Placing outages by equipment ID ─────────────────────────────────────────
+
+test("with a stop_id, outage rows are placed by equipment ID and carry the inventory", async () => {
+  const f01 = await call("get_accessibility_outages", { stop_id: "F01", upcoming: true });
+  assert.match(f01.matched_by, /^equipment id first/);
+  assert.equal(f01.station_accessibility.status, "fully_accessible");
+  assert.ok(f01.outages.length > 0);
+  for (const o of f01.outages) {
+    assert.equal(o.matched_by, "equipment id");
+    assert.deepEqual(o.inventory.stop_ids, ["F01"]);
+    assert.equal(o.inventory.ada_compliant, "YES");
+  }
+  assert.match(f01.inventory_data.source_url, /94fv-bak7/);
+  assert.match(f01.inventory_data.note, /can lag/);
+  assert.match(f01.ada_data.source_url, /39hk-dx4f/);
+});
+
+test("the ID join drops name-only false positives and finds what names missed", async () => {
+  // "Union St" (R32) used to pick up the 14 St-Union Sq rows on its shared R.
+  // The inventory puts them at R20, so they move to other_station_outages.
+  const unionSt = await call("get_accessibility_outages", { stop_id: "R32" });
+  assert.equal(unionSt.outage_count, 0);
+  assert.deepEqual(unionSt.other_station_outages.map((o) => o.station), ["14 St-Union Sq", "14 St-Union Sq"]);
+  assert.ok(unionSt.other_station_outages.every((o) => /places .* at 14 St-Union Sq/.test(o.match_note)));
+  assert.match(unionSt.no_match_note, /not proof the station is usable/);
+  assert.match(unionSt.no_match_note, /not accessible/);
+
+  // "168 St" in the feed was only ever found from A09. EL113 is coded to 112.
+  const s112 = await call("get_accessibility_outages", { stop_id: "112" });
+  assert.deepEqual(s112.outages.map((o) => [o.equipment, o.matched_by]), [["EL113", "equipment id"]]);
+  // A09 still lists it, because the feed names it, with where the inventory puts it.
+  const a09 = await call("get_accessibility_outages", { stop_id: "A09" });
+  const el113 = a09.outages.find((o) => o.equipment === "EL113");
+  assert.equal(el113.matched_by, "name");
+  assert.match(el113.match_note, /168 St-Washington Hts \(112\), another station in this complex/);
+});
+
+test("outages elsewhere in a complex are listed apart, not dropped", async () => {
+  // EL290X is "42St/Port Authority" in the feed and A27 in the inventory, in
+  // the same complex as Times Sq-42 St (127).
+  const times = await call("get_accessibility_outages", { stop_id: "127" });
+  assert.ok(times.complex_outages.some((o) => o.equipment === "EL290X" && o.matched_by === "equipment id"));
+  assert.equal(times.outages.some((o) => o.equipment === "EL290X"), false);
+  // A station outside any complex gets null, not an empty list.
+  const f01 = await call("get_accessibility_outages", { stop_id: "F01" });
+  assert.equal(f01.complex_outages, null);
+});
+
+test("rows the inventory doesn't know fall back to names, and say so", async () => {
+  const mutated = structuredClone(ENE_CURRENT);
+  const cortlandt = mutated.find((r) => r.station === "Cortlandt St");
+  cortlandt.equipment = "EL-NOT-IN-INVENTORY";
+  const previousTtl = process.env.MTA_MCP_CACHE_TTL_MS;
+  process.env.MTA_MCP_CACHE_TTL_MS = "0";
+  eneCurrentBody = mutated;
+  try {
+    const wtc = await call("get_accessibility_outages", { stop_id: "138" });
+    const row = wtc.outages.find((o) => o.equipment === "EL-NOT-IN-INVENTORY");
+    assert.equal(row.matched_by, "partial name");
+    assert.equal("inventory" in row, false, "no inventory entry, so the field is omitted");
+    assert.equal("match_note" in row, false, "138 is the closest name, so nothing to flag");
+
+    // Van Cortlandt Park-242 St also contains "Cortlandt" on the 1. It used to
+    // lose the tie-break silently. Now it gets the row, flagged.
+    const van = await call("get_accessibility_outages", { stop_id: "101" });
+    const flagged = van.outages.find((o) => o.equipment === "EL-NOT-IN-INVENTORY");
+    assert.equal(flagged.matched_by, "partial name");
+    assert.match(flagged.match_note, /WTC Cortlandt \(138\).*matches 'Cortlandt St' more closely/);
+  } finally {
+    eneCurrentBody = ENE_CURRENT;
+    await callTool("get_accessibility_outages", {});
+    if (previousTtl === undefined) delete process.env.MTA_MCP_CACHE_TTL_MS;
+    else process.env.MTA_MCP_CACHE_TTL_MS = previousTtl;
+  }
+});
+
+test("a free-text station search tags rows as name matches and shows the inventory's station", async () => {
+  const byName = await call("get_accessibility_outages", { station: "125 St", date: SAT });
+  assert.ok(byName.outages.every((o) => o.matched_by === "name"));
+  assert.deepEqual(
+    byName.outages.map((o) => [o.equipment, o.inventory.stop_ids]).sort(),
+    [["EL144", ["A15"]], ["ES102", ["116"]]]
+  );
+  assert.equal(byName.station_accessibility, null);
+  assert.equal(byName.complex_outages, null);
+});
+
+test("a not-accessible station with ADA elevators isn't told it may have none", async () => {
+  // 149 St-Hostos (415) is listed not accessible, but the inventory codes
+  // ADA-compliant EL100-EL102 there. No outage there on this date.
+  const hostos = await call("get_accessibility_outages", { stop_id: "415", date: SAT });
+  assert.equal(hostos.outage_count, 0);
+  assert.match(hostos.no_match_note, /codes 3 ADA-compliant elevator\(s\) here \(EL100, EL101, EL102\)/);
+  assert.doesNotMatch(hostos.no_match_note, /may be no elevator/);
+  assert.match(hostos.no_match_note, /not proof the station is usable/);
+
+  const route = await call("check_route_on_date", {
+    route_id: "4",
+    date: SAT,
+    stop_id: "415",
+    include_accessibility: true,
+  });
+  assert.match(route.accessibility_outages.note, /codes 3 ADA-compliant elevator/);
+  assert.match(route.accessibility_outages.note, /not proof the station is usable/);
+});
+
+test("unfiltered and route-only answers carry no inventory and no null extras", async () => {
+  for (const args of [{}, { route_id: "6" }]) {
+    const result = await call("get_accessibility_outages", args);
+    assert.ok(result.outages.length > 0);
+    for (const o of result.outages) {
+      assert.equal("inventory" in o, false);
+      assert.equal("matched_by" in o, false);
+      assert.equal("match_note" in o, false);
+    }
+  }
+  // With a station, the inventory is there.
+  const byName = await call("get_accessibility_outages", { station: "Jamaica-179 St", upcoming: true });
+  assert.ok(byName.outages.every((o) => o.inventory && o.matched_by === "name"));
+});
+
 // ─── Alerts with no active_period ────────────────────────────────────────────
 
 test("an alert with no active_period is reported on every date", async () => {

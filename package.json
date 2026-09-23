@@ -22,6 +22,7 @@
     "test": "npm run build && node --test dist/mta.test.js test/*.test.mjs",
     "smoke": "node scripts/smoke.mjs",
     "stations": "node scripts/update-stations.mjs",
+    "accessibility-data": "node scripts/update-accessibility-data.mjs",
     "prepare": "npm run build"
   },
   "dependencies": {
