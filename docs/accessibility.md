@@ -7,9 +7,10 @@ read the gaps section before telling anyone a station is accessible. A wrong
 "no outages" can leave a wheelchair user at a station with no way to reach
 the platform.
 
-Everything here was checked against the code in `src/`, the saved feed in
-`test/fixtures/` (pulled 2026-09-17), and the bundled data.ny.gov snapshots
-in `data/` (pulled 2026-09-22), unless it says otherwise. Where each source
+Everything here was checked against the code in `src/`, the saved feeds in
+`test/fixtures/` (alerts feed timestamped 2026-09-16, elevator feeds saved
+2026-09-17), and the bundled data.ny.gov snapshots in `data/` (pulled
+2026-09-22), unless it says otherwise. Where each source
 comes from and how they join: [data-sources.md](data-sources.md).
 
 ## What it answers
