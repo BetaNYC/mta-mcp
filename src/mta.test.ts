@@ -6,8 +6,17 @@ import {
   assertIsoDate,
   effectFor,
   englishText,
+  eneOverlapsEtDay,
+  eneRouteTokens,
+  eneTokens,
   etDayBounds,
   filterEneRows,
+  parseEneDateMs,
+  eneRowWithinStation,
+  feedNameWithin,
+  rowMatchesRouteTokens,
+  scoreEneStation,
+  trainnoRoutes,
   isDisrupting,
   isKnownAlertType,
   overlapsEtDay,
@@ -114,9 +123,13 @@ test("a period with no end is open-ended", () => {
   assert.equal(overlapsEtDay([{ start: satEnd + 86_400 }], SAT), false);
 });
 
-test("no periods at all never overlaps", () => {
-  assert.equal(overlapsEtDay([], SAT), false);
-  assert.equal(overlapsEtDay(undefined, SAT), false);
+test("an alert with no active_period is active on every date", () => {
+  // GTFS-realtime: "If missing, the alert will be shown as long as it appears
+  // in the feed." Returning false here silently dropped such an alert.
+  for (const date of [SAT, "2026-01-15", "2027-06-30"]) {
+    assert.equal(overlapsEtDay([], date), true, date);
+    assert.equal(overlapsEtDay(undefined, date), true, date);
+  }
 });
 
 // ─── Effect classification ───────────────────────────────────────────────────
@@ -297,4 +310,163 @@ test("retryAfterMs defaults to 1s when the header is absent or unparseable", () 
 
 test("requests identify themselves to MTA", () => {
   assert.match(USER_AGENT, /^mta-mcp\/\d+\.\d+\.\d+ \(\+https:\/\/github\.com\/BetaNYC\/mta-mcp\)$/);
+});
+
+// ─── Elevator-feed station names ─────────────────────────────────────────────
+
+test("elevator-feed names that miss GTFS by spelling now match exactly", () => {
+  // The two misses counted in the 2026-09-17 fixtures. Both scored 0 before.
+  assert.equal(scoreStation("Bedford Park Blvd", "Bedford Pk Blvd"), 0);
+  assert.equal(scoreEneStation("Bedford Park Blvd", "Bedford Pk Blvd"), 100);
+  assert.equal(
+    scoreStation("42 St-Port Authority Bus Terminal", "42St/Port Authority-Bus Terminal"),
+    0
+  );
+  assert.equal(
+    scoreEneStation("42 St-Port Authority Bus Terminal", "42St/Port Authority-Bus Terminal"),
+    100
+  );
+  assert.equal(scoreEneStation("Jamaica-Van Wyck", "Jamaica Van Wyck"), 100);
+});
+
+test("elevator-feed normalization splits glued digits and expands pk only", () => {
+  assert.deepEqual(eneTokens("42St/Port Authority"), ["42", "st", "port", "authority"]);
+  assert.deepEqual(eneTokens("42 St-Bryant Pk"), ["42", "st", "bryant", "park"]);
+  // Digits are never split from each other, so 68 St still misses 168 St.
+  assert.equal(scoreEneStation("68 St", "168 St-Washington Hts"), 0);
+});
+
+test("ordinal suffixes after a number are dropped; st is kept", () => {
+  assert.deepEqual(eneTokens("34th St"), ["34", "st"]);
+  assert.deepEqual(eneTokens("42nd St"), ["42", "st"]);
+  assert.deepEqual(eneTokens("3rd Av"), ["3", "av"]);
+  assert.deepEqual(eneTokens("1st Av"), ["1", "st", "av"]);
+  // Only after a number: "Gun Hill Rd" keeps its road.
+  assert.deepEqual(eneTokens("Gun Hill Rd"), ["gun", "hill", "rd"]);
+  assert.equal(scoreEneStation("42nd St Port Authority", "42St/Port Authority-Bus Terminal"), 80);
+  // resolve_station is untouched.
+  assert.equal(scoreStation("34th St", "34 St-Herald Sq"), 0);
+});
+
+test("feedNameWithin needs a word that is not a number or a street type", () => {
+  assert.equal(feedNameWithin("WTC Cortlandt", "Cortlandt St"), true);
+  assert.equal(feedNameWithin("Court Sq-23 St", "Court Sq"), true);
+  assert.equal(feedNameWithin("125 St", "125 St"), false);
+  assert.equal(feedNameWithin("Jamaica-179 St", "179 St"), false);
+  assert.equal(feedNameWithin("Court Sq-23 St", "Queens Plaza"), false);
+});
+
+test("a shorter feed name goes to the closest station on the shared route", () => {
+  const row = { station: "Cortlandt St", trainno: "1" };
+  assert.equal(eneRowWithinStation("138", row), true); // WTC Cortlandt, 1 word over
+  assert.equal(eneRowWithinStation("101", row), false); // Van Cortlandt Park-242 St
+  assert.equal(eneRowWithinStation("R25", row), false); // no shared route
+  assert.equal(eneRowWithinStation("138", { station: "Cortlandt St", trainno: "" }), false);
+  assert.equal(eneRowWithinStation("138", { trainno: "1" }), false);
+});
+
+test("trainno splits on slashes, commas, and spaces", () => {
+  assert.deepEqual(trainnoRoutes("A/C/E/L"), ["A", "C", "E", "L"]);
+  assert.deepEqual(trainnoRoutes("A, C / e"), ["A", "C", "E"]);
+  assert.deepEqual(trainnoRoutes(""), []);
+});
+
+test("resolve_station's own matching is unchanged by the elevator rules", () => {
+  assert.equal(scoreStation("Bryant Park", "42 St-Bryant Pk"), 0);
+  assert.equal(scoreStation("68 St", "68 St-Hunter College"), 80);
+});
+
+// ─── Elevator-feed routes ────────────────────────────────────────────────────
+
+test("express and shuttle route_ids map to the tokens trainno uses", () => {
+  assert.deepEqual(eneRouteTokens("6X"), ["6X", "6"]);
+  assert.deepEqual(eneRouteTokens("7X"), ["7X", "7"]);
+  assert.deepEqual(eneRouteTokens("FX"), ["FX", "F"]);
+  assert.deepEqual(eneRouteTokens("GS"), ["GS", "S"]);
+  assert.deepEqual(eneRouteTokens("h"), ["H", "S"]);
+  assert.deepEqual(eneRouteTokens("A"), ["A"]);
+});
+
+test("route matching is by whole trainno token, and an empty trainno is unknown", () => {
+  const row = { trainno: "A/C/E/N/Q/R/W/1/2/3/7/S" };
+  assert.equal(rowMatchesRouteTokens(row, eneRouteTokens("7X")), true);
+  assert.equal(rowMatchesRouteTokens(row, eneRouteTokens("GS")), true);
+  assert.equal(rowMatchesRouteTokens(row, eneRouteTokens("L")), false);
+  // "1" must not match "LIRR" or "11" by substring.
+  assert.equal(rowMatchesRouteTokens({ trainno: "7/LIRR" }, ["L"]), false);
+  assert.equal(rowMatchesRouteTokens({ trainno: "" }, ["6"]), null);
+  assert.equal(rowMatchesRouteTokens({}, ["6"]), null);
+});
+
+// ─── Elevator-feed dates ─────────────────────────────────────────────────────
+
+test("parseEneDateMs reads MTA's format as New York wall-clock time", () => {
+  // EDT: 11:55 PM on 9/16 is 03:55Z on 9/17.
+  assert.equal(
+    new Date(parseEneDateMs("09/16/2026 11:55:00 PM") as number).toISOString(),
+    "2026-09-17T03:55:00.000Z"
+  );
+  // EST, and the 12 AM / 12 PM edge cases.
+  assert.equal(
+    new Date(parseEneDateMs("01/15/2026 12:00:00 AM") as number).toISOString(),
+    "2026-01-15T05:00:00.000Z"
+  );
+  assert.equal(
+    new Date(parseEneDateMs("01/15/2026 12:30:00 PM") as number).toISOString(),
+    "2026-01-15T17:30:00.000Z"
+  );
+});
+
+test("parseEneDateMs returns null rather than guessing", () => {
+  for (const bad of [undefined, "", "2026-09-16", "09/16/2026", "13/01/2026 01:00:00 AM", "02/31/2026 01:00:00 AM", "09/16/2026 13:00:00 PM"]) {
+    assert.equal(parseEneDateMs(bad), null, String(bad));
+  }
+});
+
+const FETCHED = Date.parse("2026-09-17T16:00:00Z"); // when the fixtures were pulled
+
+test("an outage window overlaps the New York day, half-open", () => {
+  // Overnight work, 10 PM Friday to 6 AM Saturday.
+  const row = { outagedate: "09/18/2026 10:00:00 PM", estimatedreturntoservice: "09/19/2026 06:00:00 AM" };
+  assert.deepEqual(eneOverlapsEtDay(row, "2026-09-18", FETCHED), { overlaps: true, caveat: null });
+  assert.deepEqual(eneOverlapsEtDay(row, "2026-09-19", FETCHED), { overlaps: true, caveat: null });
+  assert.equal(eneOverlapsEtDay(row, "2026-09-20", FETCHED).overlaps, false);
+  assert.equal(eneOverlapsEtDay(row, "2026-09-17", FETCHED).overlaps, false);
+  // Returning exactly at midnight does not touch the next day.
+  const toMidnight = { outagedate: "09/18/2026 10:00:00 PM", estimatedreturntoservice: "09/19/2026 12:00:00 AM" };
+  assert.equal(eneOverlapsEtDay(toMidnight, "2026-09-19", FETCHED).overlaps, false);
+});
+
+test("missing or unreadable outage dates keep the row and flag it", () => {
+  for (const row of [
+    {},
+    { outagedate: "09/18/2026 10:00:00 PM" },
+    { outagedate: "soon", estimatedreturntoservice: "09/19/2026 06:00:00 AM" },
+  ]) {
+    assert.deepEqual(eneOverlapsEtDay(row, "2030-01-01", FETCHED), {
+      overlaps: true,
+      caveat: "unparseable_date",
+    });
+  }
+  const backwards = { outagedate: "09/19/2026 10:00:00 PM", estimatedreturntoservice: "09/18/2026 06:00:00 AM" };
+  assert.deepEqual(eneOverlapsEtDay(backwards, "2030-01-01", FETCHED), {
+    overlaps: true,
+    caveat: "inconsistent_dates",
+  });
+});
+
+test("an outage still listed after its estimated return is treated as ongoing", () => {
+  // Listed in a feed fetched 9/17 afternoon, due back 9/17 at 6 AM.
+  const overdue = { outagedate: "09/16/2026 10:30:00 PM", estimatedreturntoservice: "09/17/2026 06:00:00 AM" };
+  assert.deepEqual(eneOverlapsEtDay(overdue, "2026-09-25", FETCHED), {
+    overlaps: true,
+    caveat: "estimate_passed",
+  });
+  // Days its own window already covers get no caveat.
+  assert.deepEqual(eneOverlapsEtDay(overdue, "2026-09-16", FETCHED), { overlaps: true, caveat: null });
+  // Before it started, it still does not overlap.
+  assert.equal(eneOverlapsEtDay(overdue, "2026-09-15", FETCHED).overlaps, false);
+  // Fetched before the estimate, the estimate is trusted.
+  const early = Date.parse("2026-09-17T09:00:00Z");
+  assert.equal(eneOverlapsEtDay(overdue, "2026-09-25", early).overlaps, false);
 });

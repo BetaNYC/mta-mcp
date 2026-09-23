@@ -2,101 +2,101 @@
 
 Thanks for considering a contribution. Before you start, please:
 
-- Read this guide, and the two "not negotiable" sections below in particular
+- Read this guide, especially the ground rules below
 - Read the [README](README.md) for what the server does and how to run it
 - Read [docs/terms-compliance.md](docs/terms-compliance.md), which explains why this package is not on npm
-- Review the open [issues](https://github.com/BetaNYC/mta-mcp/issues) and [pull requests](https://github.com/BetaNYC/mta-mcp/pulls)
+- Look through the open [issues](https://github.com/BetaNYC/mta-mcp/issues) and [pull requests](https://github.com/BetaNYC/mta-mcp/pulls)
 - For anything substantial, open an issue first so we can agree on the approach before you write code
 
 ## Where to ask what
 
-This repository covers the MCP server only. Questions about the MTA feeds themselves go to the MTA, which has no dedicated developer support team but does actively monitor a public group.
+This repository covers the MCP server only. Questions about the MTA feeds themselves go to the MTA. MTA points developers to a public Google Group.
 
 | Topic | Where |
 |---|---|
 | A tool returns the wrong shape, a schema is wrong, the server crashes | [Our issue tracker](https://github.com/BetaNYC/mta-mcp/issues) |
 | A feed field is undocumented, an alert looks wrong, the API behaves unexpectedly | [MTA Developer Google Group](https://groups.google.com/g/mtadeveloperresources) |
 | MTA's GTFS and GTFS-RT implementation notes | [github.com/nymta/gtfs-documentation](https://github.com/nymta/gtfs-documentation) |
-| Actual service on an actual day | [mta.info](https://www.mta.info) — always, and this server says so in every response |
+| Actual service on an actual day | [mta.info](https://www.mta.info). Every response from this server says so too |
 
-Asking feed questions in MTA's open group rather than in our tracker gets you a better answer and helps everyone else building against the same data.
+Feed questions get better answers in MTA's group than in our tracker, and the answers help everyone else building on the same data.
 
-## Ground rules specific to this project
+## Ground rules
 
-This server reads a live public feed run by a public agency, and it answers questions people use to decide how to travel. Two sets of rules follow from that. Neither is negotiable in review.
+This server reads a live public feed run by a public agency, and people use its answers to decide how to travel. That leads to a few rules we hold firm on in review.
 
-### Do not publish this to npm
+### Don't publish this to npm
 
-`package.json` sets `"private": true`. That is not a placeholder to be cleaned up — it is the mechanism enforcing a deliberate decision, and a pull request that removes it will be closed.
+`package.json` sets `"private": true` on purpose, so an accidental publish fails. We'll close a pull request that removes it.
 
-MTA's [data feed terms](https://www.mta.info/developers/terms-and-conditions), term 1, require that users of a distributed app obtain the data from *your* non-MTA server:
+Term 1 of MTA's [data feed terms](https://www.mta.info/developers/terms-and-conditions) requires that users of a distributed app get the data from *your* server, not MTA's:
 
 > "In developing your app, you will provide that the MTA data feed is available to others only from a non-MTA server. Accordingly, you will download and store the MTA data feed on a non-MTA server which users of your app will access in order to obtain data. MTA prohibits the development of an app that would make the data available to others directly from MTA's server(s)."
 
-Shipping a package that makes third parties' machines fetch from `api-endpoint.mta.info` is the shape that clause forbids. Running it yourself, for yourself, is not. Clone it and build it; that is the supported path, and it is why there is no `npx` option in the README. The full reasoning, including the counter-argument we considered and rejected, is in [docs/terms-compliance.md](docs/terms-compliance.md).
+A published package would have every user's machine fetch from `api-endpoint.mta.info`, which is what that clause rules out. Cloning and running it yourself, for yourself, is fine, and it's the only install path the README offers. [docs/terms-compliance.md](docs/terms-compliance.md) has the full reasoning, including the counter-argument we considered.
 
-The same terms mean **no MTA route bullets or roundels** in this repo, its docs, or any output. Those are licensed intellectual property, separate from the free data terms. Write "the 6 train". Quoting MTA's own alert text verbatim — which contains ASCII `[6]` — is fine; that is their text, not their logo.
+The same terms mean no MTA route bullets or roundels anywhere in this repo, its docs, or its output. They're licensed separately from the free data. Write "the 6 train." Quoting MTA's own alert text, which writes the route as ASCII `[6]`, is fine.
 
 ### Be gentle with the feed
 
-MTA publishes **no rate limit and no refresh cadence**, and the response carries no `Cache-Control`, `ETag`, or `Expires`. We cannot negotiate politeness with the server, so we impose it ourselves. Six mechanisms in `src/mta.ts` do that: a TTL cache, single-flight de-duplication, a global minimum interval between requests, bounded retry honoring `Retry-After`, a request timeout, and an identifying `User-Agent`.
+MTA publishes no rate limit and no refresh cadence, and its responses carry no `Cache-Control`, `ETag`, or `Expires` header. So we set limits ourselves. Six mechanisms in `src/mta.ts` handle it: a TTL cache, single-flight de-duplication, a minimum gap between requests, bounded retry that honors `Retry-After`, a request timeout, and an identifying `User-Agent`.
 
-Do not add a code path that bypasses any of them, and in particular:
+Please don't add a code path that skips any of them. In particular:
 
-- **Never add background polling, a prefetch, a warm-up fetch, or a cron.** The server fetches only in direct response to a tool call. A process that fetches when nobody asked is what a denial of service looks like from the far end.
-- **Never fetch static GTFS at runtime.** Station data is generated offline into `data/stations.json` by `scripts/update-stations.mjs`. Runtime makes zero network calls for station lookup.
-- **Tests must not touch the network.** The suite runs against fixtures in `test/fixtures/`. This is both a correctness rule and the reason CI can run on every push without anyone noticing us.
+- **No background polling, prefetch, warm-up fetch, or cron.** The server fetches only when a tool is called.
+- **No fetching static GTFS at runtime.** `scripts/update-stations.mjs` generates `data/stations.json` offline, and station lookup makes no network calls.
+- **No network access in tests.** The suite runs against fixtures in `test/fixtures/`. That keeps the tests correct and lets CI run on every push without touching MTA.
 
-### Build against documentation, never against a guess
+### Build against documentation
 
-Every endpoint, field name, enum value, and response shape in this codebase should be traceable to MTA's own documentation or to a counted observation of the live feed, and the code comments cite which. A mock built on a guessed field name passes its tests and is still wrong.
+Every endpoint, field name, enum value, and response shape in this codebase should trace back to MTA's documentation or to a counted observation of the live feed, and code comments say which. A mock built on a guessed field name will pass its tests and still be wrong.
 
-Where documentation and the live feed disagree, **the live feed wins and the disagreement gets written down.** There is at least one live example: MTA documents a status rank appended to `entity.id`, and we measured it present on 1 of 150 entities. See the README's "Do not build on the entity-id rank suffix" section.
+When the documentation and the live feed disagree, go with the live feed and write down the difference. One example: MTA documents a status rank appended to `entity.id`, and we found it on 1 of 150 entities. See "Don't rely on the status rank in entity ids" in the README.
 
-## The three traps
+## Three traps
 
-If you change how alerts are matched to stations, you will meet these. Each has a test that fails the moment it is reintroduced. They are not style preferences — each one is a bug that shipped, or nearly shipped, in a real BetaNYC deliverable.
+If you change how alerts are matched to stations, you'll run into these. Each has a test that fails if it comes back, and each was a real bug in BetaNYC work, shipped or caught just before.
 
-**1. `mercury_alert.affected_stations` does not mean what its name says.** On alert `lmm:planned_work:33826` ("No 6 between Hunts Point Av and 125 St") it lists **32 stations, including 68 St–Hunter College**, which is nowhere near the suspended segment. It enumerates the route, not the impact. Shape `affected_stops` from `informed_entity` instead. A one-line field swap here silently breaks every answer the server gives.
+**1. `mercury_alert.affected_stations` lists the whole route.** On alert `lmm:planned_work:33826` ("No 6 between Hunts Point Av and 125 St") it lists 32 stations, including 68 St–Hunter College, which is nowhere near the suspension. Build `affected_stops` from `informed_entity` instead.
 
-**2. A station being mentioned in an alert does not mean its service got worse.** `Planned - Express to Local` alerts tag the stations that *gain* service. On 2026-09-19, stop 628 is tagged in two alerts — both are the 4 and the 5 running local through it, which is more trains, not fewer. Classify on `mercury_alert.alert_type` through the effect map in `src/mta.ts`; never on station mention alone.
+**2. A station named in an alert may be gaining service.** `Planned - Express to Local` alerts tag the stations that get more trains. On 2026-09-19, stop 628 is tagged in two alerts, and both are the 4 and 5 running local through it. Classify on `mercury_alert.alert_type` using the effect map in `src/mta.ts`, never on whether a station is mentioned.
 
-**3. Station names are not unique.** 193 of 496 parent stations share a name with another, across 76 distinct names. `125 St` is four different stations on four different lines. `resolve_station` returns every candidate and never picks one; the `route_id` filter is the disambiguator. If you add a code path that collapses candidates to a single station, it will be wrong roughly a quarter of the time on the most common names in the system.
+**3. Station names are not unique.** 193 of 496 parent stations share a name with another, across 76 names. `125 St` is four stations on four lines. `resolve_station` returns every candidate and never picks one, and `route_id` narrows the list.
 
-A fourth thing worth knowing, though it has no test because it is a design stance rather than a bug: **an alert type we do not recognize counts as a disruption**, and it widens to every station on the route. If we cannot say what a status means, we cannot claim to know what its station tagging means either. Fail toward caution.
+One more design choice, which has no test because it isn't a bug: an alert type we don't recognize counts as a disruption and applies to every station on the route. If we don't know what a status means, we can't trust its station tagging either.
 
 ## How to contribute
 
 ### Reporting issues
 
-A useful bug report includes the tool you called, the arguments you passed, what you expected, and what came back. Paste any error string verbatim. If it is an alert-matching question, include the `entity_id` from the response — it makes the alert findable in the raw feed.
+A useful bug report includes the tool you called, the arguments you passed, what you expected, and what came back. Paste any error message exactly. For an alert-matching question, include the `entity_id` from the response so we can find the alert in the raw feed.
 
 ### Feature requests
 
-Say what travel question you are trying to answer, not only which parameter you want added. The feeds have far more surface than this server exposes, and knowing the goal helps us decide whether the answer is a new parameter, a new tool, or a note in the README saying we deliberately do not do that.
+Tell us the travel question you're trying to answer, as well as the parameter you want. The feeds offer much more than this server uses, and knowing the goal helps us decide between a new parameter, a new tool, or a note in the README explaining why we don't.
 
-Two things are out of scope by design: trip updates and vehicle positions (protobuf-only, and they would drag in three custom `.proto` files for a feature nobody has asked for), and anything requiring a Bus Time API key.
+Two things are out of scope: trip updates and vehicle positions (protobuf-only, needing three custom `.proto` files that nobody has asked for), and anything that needs a Bus Time API key.
 
 ### Code contributions
 
 Open a pull request against `main`. Please make sure:
 
-- `npm test` passes, which builds and runs the full suite
-- New logic comes with a test, and the test does not touch the network
+- `npm test` passes. It builds and runs the full suite
+- New logic comes with a test, and the test doesn't touch the network
 - Behavior changes are reflected in the README in the same commit
-- No new dependencies. Runtime is `@modelcontextprotocol/sdk` and `zod`; that is deliberate, and a library that saves twenty lines while adding a transitive tree is a net loss here
-- Commits are scoped to one change
+- No new dependencies. The runtime uses `@modelcontextprotocol/sdk` and `zod` and nothing else, and we'd rather write twenty lines than take on a new dependency tree
+- Each commit covers one change
 
-Expect questions on anything touching `src/mta.ts` — the request path and the alert-matching logic both live there.
+Expect questions on anything in `src/mta.ts`. The request path and the alert-matching logic both live there.
 
 ### Generative AI
 
-We neither encourage nor prohibit AI coding tools here. This project was itself largely written with [Claude](https://claude.ai), and the README says so.
+We don't encourage or prohibit AI coding tools. This project was largely written with [Claude](https://claude.ai), and the README says so.
 
-If you used a generative tool for any part of a contribution, say so in the pull request. Generated code needs more review, not less, and in this codebase specifically: the most common failure we have seen is reaching for the field with the obvious-sounding name. `affected_stations` is right there, it is well-named, it parses cleanly, and it is wrong. Verify against the live feed before you submit rather than leaving that for a reviewer.
+If you used a generative tool for any part of a contribution, say so in the pull request. Generated code needs more review, not less. The most common mistake we've seen in this codebase is picking the field with the obvious name: `affected_stations` is well-named, parses cleanly, and gives the wrong answer. Check your change against the live feed before you submit.
 
 ## License
 
 This project is licensed under the [MIT License](LICENSE). By submitting a pull request, you agree that your contribution is licensed under the same terms.
 
-The MIT license covers *this code*. It does not cover MTA's data, which is governed by [MTA's terms](https://www.mta.info/developers/terms-and-conditions), or MTA's intellectual property, which requires a [separate license](https://www.mta.info/doing-business-with-us/licensing-program).
+The MIT license covers this code. MTA's data is governed by [MTA's terms](https://www.mta.info/developers/terms-and-conditions), and MTA's logos and symbols need a [separate license](https://www.mta.info/doing-business-with-us/licensing-program).

@@ -24,13 +24,14 @@ const ENE_CURRENT = fixture("nyct_ene.json");
 const ENE_UPCOMING = fixture("nyct_ene_upcoming.json");
 
 let alertsBody = ALERTS;
+let eneCurrentBody = ENE_CURRENT;
 let fetchCount = 0;
 
 globalThis.fetch = async (url) => {
   fetchCount += 1;
   const bodies = {
     [SUBWAY_ALERTS_URL]: alertsBody,
-    [ENE_CURRENT_URL]: ENE_CURRENT,
+    [ENE_CURRENT_URL]: eneCurrentBody,
     [ENE_UPCOMING_URL]: ENE_UPCOMING,
   };
   const body = bodies[url];
@@ -317,6 +318,211 @@ test("ene rows are matched by free-text station name, and say so", async () => {
 
   const unknownId = await callExpectingError("get_accessibility_outages", { stop_id: "999999" });
   assert.match(unknownId, /999999/);
+});
+
+test("stations MTA spells differently are found by GTFS name and by stop_id", async () => {
+  // Before the elevator-feed normalization, every one of these returned zero.
+  const bedford = await call("get_accessibility_outages", { station: "Bedford Park Blvd" });
+  assert.deepEqual(bedford.outages.map((o) => o.station), ["Bedford Pk Blvd"]);
+  const d03 = await call("get_accessibility_outages", { stop_id: "D03" });
+  assert.equal(d03.outage_count, 1);
+  assert.equal(d03.no_match_note, null);
+
+  const a27 = await call("get_accessibility_outages", { stop_id: "A27" });
+  assert.equal(a27.query, "42 St-Port Authority Bus Terminal");
+  assert.deepEqual(a27.outages.map((o) => o.equipment).sort(), ["EL290X", "ES607X"]);
+});
+
+test("a stop_id finds a feed name shorter than its GTFS name, on a shared route", async () => {
+  // GTFS 138 is "WTC Cortlandt"; the feed says "Cortlandt St" on the 1. That is
+  // also the GTFS name of R25 on the N/R/W, and within "Van Cortlandt Park-242
+  // St" (101), also on the 1. Only the closest name on the shared route wins.
+  const wtc = await call("get_accessibility_outages", { stop_id: "138" });
+  assert.deepEqual(wtc.outages.map((o) => o.station), ["Cortlandt St"]);
+  const vanCortlandt = await call("get_accessibility_outages", { stop_id: "101" });
+  assert.equal(vanCortlandt.outages.some((o) => o.station === "Cortlandt St"), false);
+  // R25's own forward match still finds it and moves it aside: the 1 isn't there.
+  const r25 = await call("get_accessibility_outages", { stop_id: "R25" });
+  assert.deepEqual(r25.other_station_outages.map((o) => o.station), ["Cortlandt St"]);
+
+  // F09 is "Court Sq-23 St" (E/F); the feed says "Court Sq" with E/F/G/7.
+  const f09 = await call("get_accessibility_outages", { stop_id: "F09" });
+  assert.ok(f09.outage_count > 0);
+  assert.ok(f09.outages.every((o) => o.station === "Court Sq"));
+});
+
+test("ordinals typed by a person still match", async () => {
+  const pa = await call("get_accessibility_outages", { station: "42nd St Port Authority" });
+  assert.equal(pa.outage_count, 2);
+  const thirtyFourth = await call("get_accessibility_outages", { station: "34th St" });
+  assert.ok(thirtyFourth.outage_count > 0);
+  assert.equal(thirtyFourth.no_match_note, null);
+});
+
+test("a row with no station name is kept and counted, not dropped", async () => {
+  const mutated = structuredClone(ENE_CURRENT);
+  const target = mutated.find((r) => r.isupcomingoutage === "N");
+  delete target.station;
+  const previousTtl = process.env.MTA_MCP_CACHE_TTL_MS;
+  process.env.MTA_MCP_CACHE_TTL_MS = "0";
+  eneCurrentBody = mutated;
+  try {
+    const result = await call("get_accessibility_outages", { station: "Hoboken Terminal" });
+    assert.equal(result.rows_without_station, 1);
+    assert.deepEqual(result.outages.map((o) => o.equipment), [target.equipment]);
+  } finally {
+    eneCurrentBody = ENE_CURRENT;
+    // Refill the cache with the real fixture before the TTL goes back up, or
+    // the mutated body would be served to every later test.
+    await callTool("get_accessibility_outages", {});
+    if (previousTtl === undefined) delete process.env.MTA_MCP_CACHE_TTL_MS;
+    else process.env.MTA_MCP_CACHE_TTL_MS = previousTtl;
+  }
+});
+
+test("an empty route search carries a note too", async () => {
+  const unknown = await call("get_accessibility_outages", { route_id: "ZZ" });
+  assert.equal(unknown.outage_count, 0);
+  assert.match(unknown.no_match_note, /No row in the feed lists route 'ZZ'/);
+
+  // The 6 has outages in the feed, but none scheduled to start by 2020.
+  const early = await call("get_accessibility_outages", { route_id: "6", date: "2020-01-01" });
+  assert.equal(early.outage_count, 0);
+  assert.match(early.no_match_note, /passes the date filter/);
+
+  const some = await call("get_accessibility_outages", { route_id: "6" });
+  assert.equal(some.no_match_note, null);
+});
+
+test("a zero from a name search carries a note, never a bare empty list", async () => {
+  const none = await call("get_accessibility_outages", { station: "Hoboken Terminal" });
+  assert.equal(none.outage_count, 0);
+  assert.match(none.no_match_note, /not proof there is no outage/);
+  assert.match(none.no_match_note, /short, distinctive part of the name/);
+
+  const found = await call("get_accessibility_outages", { station: "Port Authority" });
+  assert.equal(found.no_match_note, null);
+});
+
+test("with a stop_id, a same-named station on other routes is moved aside", async () => {
+  // Two 125 St rows on 2026-09-19: EL144 (A/C/B/D) and ES102 (the 1).
+  const a15 = await call("get_accessibility_outages", { stop_id: "A15", date: SAT });
+  assert.deepEqual(a15.outages.map((o) => o.equipment), ["EL144"]);
+  assert.deepEqual(a15.other_station_outages.map((o) => o.equipment), ["ES102"]);
+
+  const s116 = await call("get_accessibility_outages", { stop_id: "116", date: SAT });
+  assert.deepEqual(s116.outages.map((o) => o.equipment), ["ES102"]);
+  assert.deepEqual(s116.other_station_outages.map((o) => o.equipment), ["EL144"]);
+
+  // By name alone nothing is known about routes, so nothing is moved.
+  const byName = await call("get_accessibility_outages", { station: "125 St", date: SAT });
+  assert.equal(byName.outage_count, 2);
+  assert.equal(byName.other_station_outages, null);
+});
+
+test("route_id filters on trainno, with express and shuttle ids mapped", async () => {
+  const six = await call("get_accessibility_outages", { route_id: "6" });
+  assert.equal(six.outage_count, 7);
+  assert.ok(six.outages.every((o) => o.trainno.split("/").includes("6")));
+  assert.equal(six.route_note, null);
+
+  // No trainno says 6X; the diamond 6 shares the 6's stations.
+  const diamond = await call("get_accessibility_outages", { route_id: "6X" });
+  assert.deepEqual(diamond.route_tokens_matched, ["6X", "6"]);
+  assert.equal(diamond.outage_count, 7);
+
+  // The 42 St Shuttle is "S" in the feed.
+  const gs = await call("get_accessibility_outages", { route_id: "GS" });
+  assert.equal(gs.outage_count, 5);
+  assert.ok(gs.outages.every((o) => o.trainno.split("/").includes("S")));
+  assert.match(gs.route_note, /every shuttle as 'S'/);
+
+  // "L" must not match "LIRR".
+  const l = await call("get_accessibility_outages", { route_id: "L" });
+  assert.ok(l.outages.every((o) => o.trainno.split("/").includes("L")));
+});
+
+test("date returns in-effect and scheduled outages overlapping that day, in one request", async () => {
+  fetchCount = 0;
+  const previousTtl = process.env.MTA_MCP_CACHE_TTL_MS;
+  process.env.MTA_MCP_CACHE_TTL_MS = "0";
+  try {
+    // Jamaica-179 St's three elevators are scheduled out 9/28 10 PM to 9/29 6 AM.
+    const on28 = await call("get_accessibility_outages", { station: "Jamaica-179 St", date: "2026-09-28" });
+    assert.equal(fetchCount, 1, "a date query reads one feed");
+    assert.equal(on28.feed_url, ENE_CURRENT_URL);
+    assert.equal(on28.upcoming, null);
+    assert.equal(on28.date, "2026-09-28");
+    assert.deepEqual(on28.outages.map((o) => o.equipment).sort(), ["EL431", "EL432", "EL433"]);
+    assert.ok(on28.outages.every((o) => o.isupcomingoutage === "Y"));
+    assert.match(on28.feed_note, /New York time/);
+    assert.match(on28.feed_note, /MTA does not document it/);
+
+    const on27 = await call("get_accessibility_outages", { station: "Jamaica-179 St", date: "2026-09-27" });
+    assert.equal(on27.outage_count, 0);
+    assert.match(on27.no_match_note, /date or route filter/);
+  } finally {
+    if (previousTtl === undefined) delete process.env.MTA_MCP_CACHE_TTL_MS;
+    else process.env.MTA_MCP_CACHE_TTL_MS = previousTtl;
+  }
+});
+
+test("date keeps an overdue outage and says why", async () => {
+  // ES102 at 125 St was due back 9/18 10 PM and is still listed, so it counts
+  // on 9/19. Stable for any run after the fixture was pulled.
+  const result = await call("get_accessibility_outages", { stop_id: "116", date: SAT });
+  assert.deepEqual(result.date_caveats.map((c) => [c.equipment, c.caveat]), [
+    ["ES102", "estimate_passed"],
+  ]);
+});
+
+test("date and upcoming together are rejected, and date is validated", async () => {
+  const both = await callExpectingError("get_accessibility_outages", { date: SAT, upcoming: true });
+  assert.match(both, /date or upcoming:true, not both/);
+  // upcoming:false is the default, so it is accepted alongside date.
+  const withDefault = await call("get_accessibility_outages", { date: SAT, upcoming: false });
+  const without = await call("get_accessibility_outages", { date: SAT });
+  assert.equal(withDefault.outage_count, without.outage_count);
+  assert.equal(withDefault.feed_url, ENE_CURRENT_URL);
+  const bad = await callExpectingError("get_accessibility_outages", { date: "9/19/2026" });
+  assert.match(bad, /expected YYYY-MM-DD/);
+});
+
+// ─── Alerts with no active_period ────────────────────────────────────────────
+
+test("an alert with no active_period is reported on every date", async () => {
+  const mutated = structuredClone(ALERTS);
+  const target = mutated.entity.find((e) => e.id === "lmm:planned_work:33826");
+  delete target.alert.active_period;
+
+  const previousTtl = process.env.MTA_MCP_CACHE_TTL_MS;
+  process.env.MTA_MCP_CACHE_TTL_MS = "0";
+  alertsBody = mutated;
+  try {
+    // Christmas has no 6 alert in the fixture; with no period, this one applies.
+    const result = await call("check_route_on_date", { route_id: "6", date: "2026-12-25" });
+    assert.equal(result.alert_count, 1);
+    assert.equal(result.alerts[0].entity_id, "lmm:planned_work:33826");
+    assert.deepEqual(result.alerts[0].active_periods, []);
+    assert.equal(result.disrupted, true);
+
+    const listed = await call("get_service_alerts", { route_id: "6", date: "2027-03-01" });
+    assert.equal(listed.alert_count, 1);
+  } finally {
+    alertsBody = ALERTS;
+    await callTool("get_service_alerts", { date: SAT }); // refill the cache
+    if (previousTtl === undefined) delete process.env.MTA_MCP_CACHE_TTL_MS;
+    else process.env.MTA_MCP_CACHE_TTL_MS = previousTtl;
+  }
+});
+
+// ─── Output size ─────────────────────────────────────────────────────────────
+
+test("tool output is compact JSON, one line", async () => {
+  const result = await callTool("get_service_alerts", { date: SAT });
+  const text = result.content[0].text;
+  assert.equal(text.includes("\n"), false);
+  assert.equal(text, JSON.stringify(JSON.parse(text)));
 });
 
 // ─── Failing toward caution ──────────────────────────────────────────────────
