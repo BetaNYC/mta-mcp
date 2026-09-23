@@ -1,6 +1,6 @@
-# MTA MCP — build vocabulary
+# MTA MCP build vocabulary
 
-The words this codebase uses, and what they mean in MTA's data specifically. Most of the bugs this server exists to prevent are vocabulary errors: two things that sound like the same thing, are not, and produce a confident wrong answer when confused.
+The words this codebase uses, and what they mean in MTA's data. Most of the bugs this server is built to avoid come from mixing up two terms that sound alike but aren't, which produces a confident wrong answer.
 
 Read this before changing anything in `src/mta.ts`.
 
@@ -8,24 +8,24 @@ Read this before changing anything in `src/mta.ts`.
 
 ### Route
 
-A single service, identified by `route_id`: `"6"`, `"A"`, `"7X"`. There are **29** of them in the subway feed. This is what a rider means by "the 6 train", and it is the unit every tool here speaks.
+A single service, identified by `route_id`: `"6"`, `"A"`, `"7X"`. The subway feed has 29 of them. A route is what a rider means by "the 6 train," and every tool here works in routes.
 
-**`route_id` is the identifier. `route_short_name` is not.** Two different routes — `GS` (42 St Shuttle) and `FS` (Franklin Avenue Shuttle) — both carry `route_short_name: "S"`. Never key anything on the short name.
+**Use `route_id`, never `route_short_name`.** Two different routes, `GS` (42 St Shuttle) and `FS` (Franklin Avenue Shuttle), both have `route_short_name: "S"`.
 
-**Express variants are separate routes**, not a flag on the parent. `6` is the Lexington Avenue Local; `6X` is the Pelham Bay Park Express — what riders know as the diamond 6. Likewise `7` and `7X`. A question about "the 6" usually means both, and station route membership in `data/stations.json` reflects that: stop `628` lists `["4", "6", "6X"]`.
+**Express variants are separate routes.** `6` is the Lexington Avenue Local, and `6X` is the Pelham Bay Park Express, which riders know as the diamond 6. Likewise `7` and `7X`. A question about "the 6" usually means both, and station route membership in `data/stations.json` reflects that: stop `628` lists `["4", "6", "6X"]`.
 
 ### Line
 
-A physical trunk of track, named for the street it runs under — the Lexington Avenue Line, the 8th Avenue Line. Several routes share one line.
+A physical stretch of track, named for the street it runs under, like the Lexington Avenue Line or the 8th Avenue Line. Several routes share one line.
 
-**This codebase does not model lines.** `route_long_name` gestures at them ("Lexington Avenue Local", "8 Avenue Express") but there is no line identifier in the feed and no tool takes one. When a human asks "what's happening on the Lexington line this weekend," that resolves to a `get_service_alerts` call across the 4, 5, 6, and 6X. Do not invent a line abstraction to make that one phrasing tidier.
+**This codebase doesn't model lines.** `route_long_name` hints at them ("Lexington Avenue Local", "8 Avenue Express") but there is no line identifier in the feed and no tool takes one. When someone asks "what's happening on the Lexington line this weekend," that becomes `get_service_alerts` calls for the 4, 5, 6, and 6X. Please don't add a line abstraction just to handle that phrasing.
 
 ### Parent station vs. platform
 
 `stops.txt` carries both, distinguished by `location_type`:
 
-- **Parent station** (`location_type=1`) — the station as a rider thinks of it. `628` is 68 St–Hunter College.
-- **Platform** (`location_type` empty, with a `parent_station`) — one direction. `628N` and `628S`.
+- **Parent station** (`location_type=1`): the station as a rider thinks of it. `628` is 68 St–Hunter College.
+- **Platform** (`location_type` empty, with a `parent_station`): one direction, such as `628N` or `628S`.
 
 **The alerts feed emits parent stations only.** In the 2026-09-16 sample: 402 distinct `stop_id` values, zero with an `N`/`S` suffix. Direction, where MTA provides it, arrives separately as `direction_id` on the informed entity (`0` northbound, `1` southbound, **omitted means both**).
 
@@ -33,38 +33,38 @@ A physical trunk of track, named for the street it runs under — the Lexington 
 
 ### Station complex
 
-Several parent stations a rider can transfer between without leaving fare control. These are **not** one station in the data, and they come in two flavors, only one of which this server handles:
+Several parent stations a rider can transfer between without leaving fare control. In the data they're separate stations, and they come in two kinds. This server handles only the first.
 
-**Same name, several IDs.** 193 of 496 parent stations share a name with another, across 76 distinct names. `125 St` is four stations on four unrelated lines — `116` (1), `225` (2/3), `621` (4/5/6/6X), `A15` (A/B/C/D). `Times Sq-42 St` is four. `14 St` is three. This is why `resolve_station` returns every candidate and never picks, and why the `route_id` filter has to work.
+**Same name, several IDs.** 193 of 496 parent stations share a name with another, across 76 distinct names. `125 St` is four stations on four unrelated lines: `116` (1), `225` (2/3), `621` (4/5/6/6X), and `A15` (A/B/C/D). `Times Sq-42 St` is four. `14 St` is three. This is why `resolve_station` returns every candidate and never picks, and why the `route_id` filter has to work.
 
-**Different names, linked only by `transfers.txt`.** 60 such pairs — `Times Sq-42 St (127)` ↔ `42 St-Port Authority Bus Terminal (A27)`, `Park Place (228)` ↔ `World Trade Center (E01)`. **We deliberately do not model these.** Asking about one name will not surface alerts filed against its connected neighbor under a different name. The gap is documented in the README rather than coded around, because nothing in BetaNYC's actual use has needed it.
+**Different names, linked only by `transfers.txt`.** There are 60 such pairs, including `Times Sq-42 St (127)` ↔ `42 St-Port Authority Bus Terminal (A27)` and `Park Place (228)` ↔ `World Trade Center (E01)`. **We don't model these.** Asking about one name won't surface alerts filed against its connected neighbor. The README documents the gap. We haven't coded around it because BetaNYC's use hasn't needed it.
 
 ## Alerts
 
 ### Entity
 
-One item in the feed's `entity` array: an `id` plus an `alert`. The 2026-09-16 sample held 150; a 2026-09-17 pull held 199. **The feed is `FULL_DATASET`** — each fetch is the complete current picture, not a delta. There is no state to accumulate and nothing to reconcile between fetches.
+One item in the feed's `entity` array: an `id` plus an `alert`. The 2026-09-16 sample held 150; a 2026-09-17 pull held 199. **The feed is `FULL_DATASET`.** Each fetch is the complete current picture, so there's no state to keep or reconcile between fetches.
 
-Entity IDs come in two shapes, and the split matters:
+Entity IDs come in two shapes:
 
-- `lmm:planned_work:33826` — scheduled work, announced ahead. **149 of 150** in the sample.
-- `lmm:alert:267678:26` — a live incident, happening now.
+- `lmm:planned_work:33826`: scheduled work, announced ahead. 149 of 150 in the sample.
+- `lmm:alert:267678:26`: a live incident, happening now.
 
 ### Informed entity
 
 An entry in `alert.informed_entity[]` saying who the alert is about. Always carries `route_id` and `agency_id` (`"MTASBWY"`); carries `stop_id` only when MTA chose to tag stations, and `direction_id` only sometimes.
 
-**This is the authoritative impact list, and it is the only one.** See the trap below.
+**This is the only reliable list of what an alert affects.** See the traps below.
 
 ### Active period
 
-`alert.active_period[]`, a list of `{start, end}` epoch-second pairs. Recurring weekend work appears as **several** periods, so the test is "does any period overlap the event day," evaluated in `America/New_York` — not UTC, which is a different day for four hours every night.
+`alert.active_period[]`, a list of `{start, end}` epoch-second pairs. Recurring weekend work shows up as several periods, so the test is whether any period overlaps the event day. Evaluate that in `America/New_York`. UTC is a different day for four hours every night.
 
-Alongside it, `mercury_alert.human_readable_active_period` carries MTA's own rider-facing phrasing: *"Sep 18 - Oct 19, Fri 9:30 PM to Mon 5:00 AM"*. **Prefer it in anything a human reads.** It says what a reformatted timestamp cannot, and it is MTA's wording rather than ours.
+Alongside it, `mercury_alert.human_readable_active_period` carries MTA's own rider-facing phrasing: *"Sep 18 - Oct 19, Fri 9:30 PM to Mon 5:00 AM"*. Use it in anything a person will read. It's MTA's own wording, and it says more than a reformatted timestamp can.
 
 ### Alert type, and effect
 
-`mercury_alert.alert_type` is MTA's status string: `"Planned - Part Suspended"`, `"Planned - Express to Local"`, `"Delays"`. **Effect** is ours — a classification of what that status means for a rider at a tagged station, defined in `src/mta.ts`:
+`mercury_alert.alert_type` is MTA's status string: `"Planned - Part Suspended"`, `"Planned - Express to Local"`, `"Delays"`. **Effect** is ours: what that status means for a rider at a tagged station, defined in `src/mta.ts`.
 
 | effect | means |
 |---|---|
@@ -75,36 +75,36 @@ Alongside it, `mercury_alert.human_readable_active_period` carries MTA's own rid
 | `informational` | a notice, not a service change |
 | `unknown` | a status string we have never seen |
 
-`unknown` counts as a disruption, and widens to every station on the route rather than only tagged ones. If we cannot say what a status means, we cannot claim to know what its station tagging means either.
+`unknown` counts as a disruption and applies to every station on the route, not only tagged ones. If we don't know what a status means, we can't trust its station tagging either.
 
 ### Mercury
 
-MTA's custom GTFS-Realtime extension carrying everything above beyond the base spec. In protobuf it needs a `.proto` file; **in the `.json` variant of the feed it arrives as ordinary keys** named by their fully-qualified extension name — `"transit_realtime.mercury_alert"`, `"transit_realtime.mercury_entity_selector"`.
+MTA's custom GTFS-Realtime extension, which carries everything above that isn't in the base spec. In protobuf it needs a `.proto` file. **In the `.json` version of the feed, it arrives as ordinary keys** named by their full extension name, such as `"transit_realtime.mercury_alert"` and `"transit_realtime.mercury_entity_selector"`.
 
-That is the single fact that makes this server small. We consume the JSON feed and never compile a protobuf.
+That's why this server can stay small. We read the JSON feed and never compile a protobuf.
 
-Six documented Mercury fields never appeared in any live sample: `no_affected_stations`, `clone_id`, `screens_summary`, `directionality`, `service_plan_number`, `general_order_number`. Do not build on them.
+Six documented Mercury fields never appeared in any live sample: `no_affected_stations`, `clone_id`, `screens_summary`, `directionality`, `service_plan_number`, and `general_order_number`. Don't build on them.
 
 ## The traps, in vocabulary terms
 
-**`affected_stations` is not the affected stations.** `mercury_alert.affected_stations` on `lmm:planned_work:33826` — "No 6 between Hunts Point Av and 125 St" — lists **32 stations including 68 St–Hunter College**, which is six miles from the suspended segment. It enumerates the route. The real impact list is `informed_entity`, which names six stops. The field is well-named, parses cleanly, and is wrong.
+**`affected_stations` lists the whole route.** On `lmm:planned_work:33826` ("No 6 between Hunts Point Av and 125 St"), `mercury_alert.affected_stations` lists 32 stations, including 68 St–Hunter College, which is nowhere near the suspension. The real impact list is `informed_entity`, which names six stops.
 
-**"Affected" is not "worse".** A station tagged by a `Planned - Express to Local` alert is *gaining* service. Two such alerts tag stop 628 on 2026-09-19 and both mean more trains. "Is my station mentioned" is not the question; "what does this status do to my station" is.
+**"Affected" can mean better.** A station tagged by a `Planned - Express to Local` alert is gaining service. Two such alerts tag stop 628 on 2026-09-19, and both mean more trains. The useful question is what the status does to your station, not whether your station is mentioned.
 
-**"Not tagged" is not "not affected".** MTA tags stations only when a change is significant enough to warrant the detail. Their own spec says so:
+**A station without a tag may still be affected.** MTA tags stations only when it decides a change is significant enough. Its own spec says so:
 
 > "Consumers should not assume that every alert will include Stations Affected data."
 
-So every response carries `station_level_detail`, reporting whether MTA tagged stations at all. A `disrupted: false` with `station_level_detail: false` means "we found nothing station-specific," not "your station is fine."
+So every response includes `station_level_detail`, which reports whether MTA tagged stations at all. `disrupted: false` with `station_level_detail: false` means we found nothing station-specific. It doesn't mean your station is fine.
 
 ## Data sources
 
 | What | Where | Notes |
 |---|---|---|
 | Subway service alerts | `api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alerts.json` | No key. Published at [api.mta.info](https://api.mta.info/#/serviceAlerts) |
-| Elevator/escalator outages | `…/nyct%2Fnyct_ene.json`, `…/nyct%2Fnyct_ene_upcoming.json` | Flat JSON arrays, **not** GTFS-RT. `station` is free text, not a `stop_id` |
+| Elevator/escalator outages | `…/nyct%2Fnyct_ene.json`, `…/nyct%2Fnyct_ene_upcoming.json` | Flat JSON arrays, not GTFS-RT. `station` is free text rather than a `stop_id` |
 | Static GTFS | `rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip` | Build-time only, via `scripts/update-stations.mjs`. Never fetched at runtime |
-| MTA's own feed documentation | [github.com/nymta/gtfs-documentation](https://github.com/nymta/gtfs-documentation) | Sparse, and not always true of the live feed — see the README on the entity-id rank suffix |
+| MTA's own feed documentation | [github.com/nymta/gtfs-documentation](https://github.com/nymta/gtfs-documentation) | Sparse, and doesn't always match the live feed. See the README on the entity-id status rank |
 | Terms | [mta.info/developers/terms-and-conditions](https://www.mta.info/developers/terms-and-conditions) | Why this is not on npm: [docs/terms-compliance.md](docs/terms-compliance.md) |
 
-No API key is required for anything here. Bus Time — live bus positions and arrivals — is the one MTA product that needs an account, and it is out of scope.
+Nothing here needs an API key. Bus Time, for live bus positions and arrivals, is the one MTA product that needs an account, and it's out of scope.

@@ -123,8 +123,8 @@ ul.tight li{margin-bottom:6px}
 </head>
 <body>
 
-<div class="alpha-bar">⚠️ Alpha, v0.1.0 — early code, shared to find out what breaks.
-Tool shapes can change without notice.
+<div class="alpha-bar">⚠️ Alpha, v0.1.0. Early code, shared now so we can find out what breaks.
+Tool names and response shapes may change without notice.
 <a href="https://github.com/BetaNYC/mta-mcp/issues">Tell us what's wrong</a></div>
 
 <header>
@@ -141,7 +141,7 @@ Tool shapes can change without notice.
     <p class="hdr-meta">Every demo below is badged. <span class="badge v">Verified 2026-09-21</span>
     means that exact call was run and that is what came back.
     <span class="badge i">Illustrative</span> means it shows the shape of an answer, not live values.
-    <br><strong>MTA's feed moves.</strong> A verified panel is a photograph, not a window.</p>
+    <br>MTA's feed changes, so a verified panel shows what came back on that date.</p>
       </div>
     </div>
   </div>
@@ -149,13 +149,13 @@ Tool shapes can change without notice.
 
 <div class="wrap">
 
-<h2>Start by conceding the easy case</h2>
-<p>If your question is <em>"is the L running right now,"</em> close this page. Open
-<a href="https://mta.info/alerts">mta.info</a> or any transit app. They are free, official,
-and faster than anything here. This tool would be a worse answer.</p>
-<p>It earns its place on a narrower question, and the narrowness is the point: <strong>a date in the
-future, a specific station, and a yes or no you are willing to put in an email to 3,000
-people.</strong> That question is tedious by hand and easy to get confidently wrong.</p>
+<h2>When to use something else</h2>
+<p>If your question is <em>"is the L running right now,"</em> use
+<a href="https://mta.info/alerts">mta.info</a> or any transit app. They're free, official,
+and faster than this.</p>
+<p>This server is for a narrower question: <strong>a future date, a specific station, and a yes
+or no you'd put in an email to 3,000 people.</strong> That's tedious to check by hand and easy
+to get wrong.</p>
 
 <h2>Simple first: which station did you mean?</h2>
 
@@ -191,7 +191,7 @@ people.</strong> That question is tedious by hand and easy to get confidently wr
           <tr><td><code>621</code></td><td>4, 5, 6, 6X</td></tr>
           <tr><td><code>A15</code></td><td>A, B, C, D</td></tr>
         </table>
-        <div class="verdict"><strong>It refuses to guess.</strong> 193 of 496 stations share a
+        <div class="verdict"><strong>It doesn't guess.</strong> 193 of 496 stations share a
         name with another. Pass <code>route_id</code> to narrow it, or pick a
         <code>stop_id</code>.</div>
       </div>
@@ -199,14 +199,13 @@ people.</strong> That question is tedious by hand and easy to get confidently wr
   </div>
 </div>
 
-<div class="note"><b>Why this one never goes stale.</b> <code>resolve_station</code> reads a
+<div class="note"><b>This panel won't go out of date.</b> <code>resolve_station</code> reads a
 station list generated from MTA's static GTFS and committed to the repo. It makes no network call,
-so this panel will read the same next year unless MTA renames a station.</div>
+so this answer holds until MTA renames a station.</div>
 
-<h2>Harder: "affected" does not mean "worse"</h2>
+<h2>Harder: "affected" can mean better</h2>
 
-<p>This is the demo worth your time. It is a real trap, and the obvious implementation walks
-straight into it.</p>
+<p>This is the case that trips up a simple implementation.</p>
 
 <div class="demo" data-demo="2">
   <div class="demo-head">
@@ -244,24 +243,23 @@ straight into it.</p>
           <tr><td>Planned&nbsp;-&nbsp;Stops Skipped<br><span class="small">names no stations</span></td>
               <td><code>reduced</code></td><td class="n">yes</td></tr>
         </table>
-        <div class="verdict"><strong>Both behaviors, one answer.</strong> The express-to-local
-        alert tags 68 St and is <em>not</em> counted as a disruption, because running local means
-        <em>more</em> trains stop there. The second alert names no stations, so the tool will not
-        claim your station is clear. It fails toward caution and says which alert caused it.</div>
+        <div class="verdict"><strong>One answer covers both alerts.</strong> The express-to-local
+        alert tags 68 St and doesn't count as a disruption, because running local means
+        more trains stop there. The second alert names no stations, so the tool won't
+        say your station is clear. It errs on the side of caution and says which alert caused it.</div>
       </div>
     </div>
   </div>
 </div>
 
-<div class="warnbox"><b>The trap, stated plainly.</b> A check that asks <em>"is my station mentioned
-in any alert?"</em> reports a disruption here that does not exist. The alert mentioning 68 St is
-<em>added</em> service. Every existing NYC subway MCP we surveyed collapses this into one generic
-"service change" bucket. Classification is on MTA's <code>alert_type</code>, never on
-station mention.</div>
+<div class="warnbox"><b>Why this matters.</b> A check that asks <em>"is my station mentioned
+in any alert?"</em> reports a disruption here that doesn't exist, because the alert mentioning
+68 St is added service. Every other NYC subway MCP we looked at treats all of these as one generic
+"service change." This server classifies on MTA's <code>alert_type</code> instead.</div>
 
 <h2>What it cannot do</h2>
 
-<p>Knowing which questions a tool cannot answer is part of using it.</p>
+<p>Questions this server can't answer:</p>
 
 <table>
   <tr><th>Not this</th><th>Why</th></tr>
@@ -281,8 +279,8 @@ station mention.</div>
 
 <h2>Why this is not on npm</h2>
 
-<p>BetaNYC publishes seven MCP servers to npm. This one is deliberately not among them, and the
-reason is worth more than the code.</p>
+<p>BetaNYC publishes seven MCP servers to npm. This one is intentionally not one of them,
+because of MTA's data terms.</p>
 
 <p>MTA's <a href="https://mta.info/developers/terms-and-conditions">data feed terms</a>, term 1:</p>
 
@@ -293,49 +291,47 @@ non-MTA server. Accordingly, you will download and store the MTA data feed on a 
 development of an app that would make the data available to others directly from MTA's server(s)."
 </blockquote>
 
-<p>A published package makes every installer's machine fetch straight from
-<code>api-endpoint.mta.info</code>, with no server of ours in between. There is a tempting
-counter-argument, that each user is simply fetching for themselves. It does not survive the clause's
-own wording: the non-MTA server is defined as the one <em>"which users of your app will access in
-order to obtain data."</em> It names the exact party the counter-argument tries to carve out.</p>
+<p>A published package would have every user's machine fetch straight from
+<code>api-endpoint.mta.info</code>, with no server of ours in between. You could argue that each
+user is just fetching for themselves. We don't think that holds up, because the clause defines the
+non-MTA server as the one <em>"which users of your app will access in order to obtain data."</em>
+That covers those same users.</p>
 
-<p>So <code>package.json</code> sets <code>"private": true</code>, and the decision is enforced in
-code rather than in a comment somebody later deletes.</p>
+<p>So <code>package.json</code> sets <code>"private": true</code>, and an accidental publish
+fails.</p>
 
-<div class="note"><b>The same terms bind the output.</b> No claim that the data is accurate,
-complete, or timely. A visible as-of timestamp on anything cached. And MTA route bullets are
-licensed intellectual property, separate from the free data terms. So this page and every
-response write "the 6 train" rather than reproducing a route indicator. The circle at the top of
-this page is not one: there is no MCP train, and no MTA mark is reproduced in it.</div>
+<div class="note"><b>The same terms apply to every answer.</b> We make no claim that the data
+is accurate, complete, or timely, and anything cached says when it was fetched. MTA route
+bullets are licensed separately from the free data, so this page and every response write
+"the 6 train" instead. The blue circle at the top of this page is the MCP logo, not an MTA
+mark.</div>
 
 <h2>Running it</h2>
 
 <div class="alpha-box">
   <h3>⚠️ Read this before you install it</h3>
-  <p style="margin:0">This is <strong>v0.1.0 alpha</strong>, in active development, and it has not
-  been used by anyone outside BetaNYC. We are sharing it this early on purpose, to find out what
-  breaks. <strong>Tool names, parameters, and response shapes can change without notice.</strong>
-  Do not build anything you care about on it yet.</p>
+  <p style="margin:0">This is <strong>v0.1.0 alpha</strong>. Nobody outside BetaNYC has used it
+  yet, and we're sharing it now to find out what breaks. <strong>Tool names, parameters, and
+  response shapes may change without notice</strong>, so please don't build anything important
+  on it yet.</p>
   <ul>
-    <li><strong>Only the subway alerts feed has been inspected.</strong> Bus, Long Island Rail
-        Road, and Metro-North are untested and may not share the same conventions. MTA claims
-        they do, and we have already found one place that claim does not hold.</li>
-    <li><strong>The effect classification covers 11 <code>alert_type</code> values</strong> seen
-        across two live pulls. MTA can emit others. An unrecognized one counts as a disruption
-        by design, but that is a safety net rather than coverage.</li>
-    <li><strong>Tested against a handful of real dates and stations</strong>, not a broad corpus.</li>
+    <li>We have only inspected the subway alerts feed. Bus, Long Island Rail Road, and
+        Metro-North alerts are untested. MTA says all four feeds follow the same conventions, and
+        we've already found one place where they don't.</li>
+    <li>The effect classification covers the 11 <code>alert_type</code> values we saw across two
+        live pulls. MTA can send others. An unrecognized value counts as a disruption, which keeps
+        answers cautious but isn't the same as coverage.</li>
+    <li>We've tested it against a handful of real dates and stations.</li>
   </ul>
-  <p style="margin:12px 0 0"><strong>Found something wrong?</strong>
-  <a href="https://github.com/BetaNYC/mta-mcp/issues">Open an issue.</a> That is the point of
-  putting it out this early.</p>
+  <p style="margin:12px 0 0">Found something wrong?
+  <a href="https://github.com/BetaNYC/mta-mcp/issues">Open an issue.</a></p>
 </div>
 
-<p>Clone and build. Node 20 or newer. No API key is needed for any feed it uses.</p>
+<p>Clone and build. You need Node 18 or newer, and no API key.</p>
 
 <pre>git clone https://github.com/BetaNYC/mta-mcp.git
 cd mta-mcp
-npm install
-npm run build</pre>
+npm install    # also builds</pre>
 
 <p>Then point an MCP client at the build. For Claude Code, in <code>.mcp.json</code>:</p>
 
@@ -349,35 +345,34 @@ npm run build</pre>
 }</pre>
 
 <h3>Being gentle with a public feed</h3>
-<p>MTA publishes no rate limit, no refresh cadence, and no cache headers, so politeness cannot be
-negotiated with the server. Six mechanisms impose it instead, all on by default: a 60-second
+<p>MTA publishes no rate limit, no refresh cadence, and no cache headers, so the server sets its
+own limits. Six are on by default: a 60-second
 response cache, single-flight de-duplication, a process-wide one-second floor between requests,
 bounded retry that honors <code>Retry-After</code>, a 15-second timeout, and a
 <code>User-Agent</code> that identifies the project.</p>
-<p><strong>There is no background polling</strong>, no prefetch, no warm-up fetch. It fetches only
-when a tool is called. The test suite makes zero network requests, so continuous integration never
-touches MTA at all.</p>
+<p>There's no background polling, prefetch, or warm-up fetch. It fetches only when a tool is
+called. The test suite makes no network requests, so continuous integration never touches MTA.</p>
 
 <h2>What we could not verify</h2>
 <ul class="tight">
-  <li><strong>MTA's own documentation is wrong in at least one place.</strong> It states that a
-      status rank is appended to every alert id. We measured it present on <strong>1 of 150</strong>
-      entities. Whether that is a partial rollout or a documentation error is unknown, and we build
-      on a different field because of it.</li>
-  <li><strong>Refresh cadence is undocumented.</strong> Not published anywhere, and the response
-      carries no cache headers. Our polling floor is a guess made conservative on purpose.</li>
-  <li><strong>Only the subway feed was inspected.</strong> Bus, Long Island Rail Road, and
-      Metro-North alerts may not share the same conventions. MTA claims cross-agency uniformity;
-      the point above is one place that claim does not hold.</li>
-  <li><strong>Six documented fields never appeared</strong> in any live sample we pulled, so nothing
-      is built on them.</li>
+  <li><strong>MTA's documentation and the live feed disagree in at least one place.</strong> The
+      docs say a status rank is appended to every alert id. We found it on 1 of 150 entities. We
+      don't know if that's a partial rollout or a documentation error, so we use a different
+      field.</li>
+  <li><strong>The refresh cadence is undocumented.</strong> MTA doesn't publish it, and responses
+      carry no cache headers. Our one-second minimum between requests is a cautious guess.</li>
+  <li><strong>We only inspected the subway feed.</strong> MTA says bus, Long Island Rail Road, and
+      Metro-North alerts follow the same conventions. The status rank above is one place they
+      don't.</li>
+  <li><strong>Six documented fields never appeared</strong> in any live sample we pulled, so we
+      don't use them.</li>
 </ul>
 
 <h2>Other NYC subway MCP servers</h2>
 
-<p>This is not the only one, and for most questions it is not the one you want. Several of these
-are further along, and all of them do <strong>live arrivals</strong>, which this server does not do
-at all. If your question is "when is the next train," start here rather than with us.</p>
+<p>For most subway questions, one of these is a better fit. Several are further along than ours,
+and all of them do <strong>live arrivals</strong>, which this server doesn't. If your question is
+"when is the next train," start with one of these.</p>
 
 <table>
   <tr>
@@ -414,33 +409,31 @@ at all. If your question is "when is the next train," start here rather than wit
   </tr>
 </table>
 
-<p><strong>What this server does that they do not:</strong> take a <em>date</em>. Every one of the
-above answers about now. None of them accepts a future date, and none of them separates service
-that got <em>worse</em> from service that got <em>better</em> at a station. That gap is the only
-reason this exists.</p>
+<p><strong>What this server adds:</strong> it takes a <em>date</em>. The servers above answer
+about right now. None of them accepts a future date, and none separates service that got worse
+from service that got better at a station. That's the gap this server fills.</p>
 
 <h2>Community</h2>
 
-<p>Three different questions, three different places. Sending one to the wrong place mostly wastes
-your time, so here is the routing.</p>
+<p>Where to take your question:</p>
 
 <table>
   <tr><th>Your question</th><th>Where it goes</th></tr>
   <tr>
     <td>A tool returns the wrong shape, a schema is wrong, this server crashes</td>
     <td><a href="https://github.com/BetaNYC/mta-mcp/issues">Our issue tracker</a><br>
-        <span class="small">Especially while this is alpha. Include the <code>entity_id</code> from
-        the response if it is an alert-matching question; it makes the alert findable in the raw
+        <span class="small">Especially while this is alpha. For an alert-matching question, include
+        the <code>entity_id</code> from the response so we can find the alert in the raw
         feed.</span></td>
   </tr>
   <tr>
     <td>A feed field is undocumented, an alert looks wrong, MTA's API behaves oddly</td>
     <td><a href="https://groups.google.com/g/mtadeveloperresources"><strong>MTA Developer
         Google Group</strong></a><br>
-        <span class="small">MTA has no dedicated developer support team but actively monitors this
-        group. Asking there rather than in our tracker gets you a better answer and helps everyone
-        else building against the same feeds. It is also where we would take the two open questions
-        in "what we could not verify" above.</span></td>
+        <span class="small">MTA has no developer support team, but it watches this group. You'll
+        get a better answer there than in our tracker, and it helps everyone else building on the
+        same feeds. It's also where we'd take the open questions in "What we could not verify"
+        above.</span></td>
   </tr>
   <tr>
     <td>You want to build civic tech in New York with other people</td>
@@ -452,15 +445,15 @@ your time, so here is the routing.</p>
 <h3>BetaBuilders</h3>
 
 <p>In BetaNYC's own words, <em>"a BetaBuilder is a New Yorker who sustains the city's civic
-infrastructure."</em> The <strong>BetaNYC Discord</strong> is where classes, fellowships, and open
-data work get planned, where projects and job openings get posted, and where a tool like this one
-gets argued about before it is any good.</p>
+infrastructure."</em> The <strong>BetaNYC Discord</strong> is where we plan classes, fellowships,
+and open data work, post projects and job openings, and talk through tools like this one while
+they're still rough.</p>
 
-<p>Membership is earned rather than bought, and there are several doors:</p>
+<p>There are several ways to join:</p>
 
 <ul class="tight">
   <li><strong>Show up.</strong> Attending a class or registering for a flagship event earns
-      90 days of access at no cost. This is a real door, not a consolation prize.</li>
+      90 days of access at no cost.</li>
   <li><strong>Give monthly.</strong> $5 a month funds School of Data, Mapping for Equity, Open Data
       Week, CityCamp NYC, and the weekly newsletter.</li>
   <li><strong>Serve.</strong> Fellows, alumni, Open Data Ambassadors, volunteers, working-group
@@ -469,23 +462,23 @@ gets argued about before it is any good.</p>
       commits to prioritizing access for people traditionally excluded from civic work.</li>
 </ul>
 
-<div class="note"><b>Most of it never goes behind a membership.</b> The weekly newsletter, public
-events, classes, every open data resource, and all the research stay free. That includes this
-server. Membership buys the room, not the work.</div>
+<div class="note"><b>Most of what we do stays free.</b> The weekly newsletter, public events,
+classes, open data resources, and research don't require a membership. Neither does this
+server.</div>
 
-<p><a href="https://beta.nyc/betabuilders/"><strong>Read the full thing and pick a door →</strong></a></p>
+<p><a href="https://beta.nyc/betabuilders/"><strong>Learn more about BetaBuilders →</strong></a></p>
 
 <h2>Credits</h2>
 <p>Data from the <a href="https://api.mta.info/#/serviceAlerts">MTA service alerts feed</a>,
 free to use under MTA's terms. Station names from MTA's published static GTFS. MTA's own
 implementation notes live at
 <a href="https://github.com/nymta/gtfs-documentation">nymta/gtfs-documentation</a>, which is
-sparse but is the only first-party source for how these feeds actually behave.</p>
+sparse but is MTA's only published source on how these feeds behave.</p>
 <h3>About BetaNYC</h3>
 
-<p>This is built and maintained by <a href="https://beta.nyc"><strong>BetaNYC</strong></a>, New
-York's civic technology and open-data community. We work to improve lives in New York through
-civic design, technology, data, and public-interest technology.</p>
+<p><a href="https://beta.nyc"><strong>BetaNYC</strong></a> builds and maintains this project.
+We're New York's civic technology and open data community, and we work to improve lives in New
+York through civic design, technology, and data.</p>
 
 <table>
   <tr><th>Where to look</th><th>What is there</th></tr>
@@ -514,10 +507,9 @@ civic design, technology, data, and public-interest technology.</p>
 request because of bot protection, not because they are dead; both were confirmed in a real
 browser. MTA redirects <code>www.mta.info</code> to <code>mta.info</code>, so the bare form is
 used here.</p>
-<p><strong>AI disclosure.</strong> This server was largely written with
-<a href="https://claude.ai">Claude</a>, and this page with it too. Every response shape shown here
-was observed in a real call rather than invented, which is the repository's own standing rule and
-the reason the badges exist.</p>
+<p><strong>AI disclosure.</strong> This server and this page were largely written with
+<a href="https://claude.ai">Claude</a>. Every response shape shown here comes from a real call,
+which is what the badges mark.</p>
 
 </div>
 
