@@ -43,6 +43,7 @@ mkdirSync(CACHE_DIR, { recursive: true });
 const cacheFile = (url) => join(CACHE_DIR, createHash("sha256").update(url).digest("hex") + ".json");
 
 let oldestCacheHit = null; // epoch ms of the oldest cached feed used this run
+const cacheHitAt = new Map(); // url -> epoch ms that cached copy was saved
 const realFetch = globalThis.fetch;
 globalThis.fetch = async (input, init) => {
   const url = String(input instanceof Request ? input.url : input);
@@ -53,6 +54,7 @@ globalThis.fetch = async (input, init) => {
     const savedAt = statSync(file).mtimeMs;
     if (Date.now() - savedAt < TTL_MS) {
       oldestCacheHit = Math.min(oldestCacheHit ?? savedAt, savedAt);
+      cacheHitAt.set(url, savedAt);
       return new Response(readFileSync(file), {
         status: 200,
         headers: { "content-type": "application/json" },
@@ -104,5 +106,11 @@ const payload = JSON.parse(text);
 // back. The staleness disclosure MTA's terms require depends on it.
 if (oldestCacheHit !== null && "fetched_at" in payload) {
   payload.fetched_at = new Date(oldestCacheHit).toISOString();
+}
+// check_route_on_date with include_accessibility reads a second feed and
+// reports its fetch time separately.
+const nested = payload.accessibility_outages;
+if (nested && cacheHitAt.has(nested.feed_url)) {
+  nested.fetched_at = new Date(cacheHitAt.get(nested.feed_url)).toISOString();
 }
 console.log(JSON.stringify(payload));

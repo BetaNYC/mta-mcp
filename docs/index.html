@@ -273,10 +273,12 @@ tells added service apart from reduced service. This server classifies on MTA's
   <tr><td>"Are Times Sq and Port Authority connected?"</td>
       <td>Stations linked only by transfer, under different names, are not modeled. 60 such pairs
           exist. Asking about one name will not surface alerts filed against the other.</td></tr>
-  <tr><td>"Is this station accessible?"</td>
-      <td>Not yet. The station list doesn't include accessibility status. MTA's
+  <tr><td>"Can I get step-free to the platform today?"</td>
+      <td>Only in part. Each station carries MTA's ADA status, and elevator outages come with
+          MTA's alternate route, but the status is a dated snapshot and a missing outage is not
+          proof the station is usable. Confirm on MTA's
           <a href="https://www.mta.info/elevator-escalator-status">elevator and escalator status
-          page</a> does.</td></tr>
+          page</a>.</td></tr>
   <tr><td>"Is my station definitely fine?"</td>
       <td>MTA tags stations only when it considers the change significant. Every response carries
           <code>station_level_detail</code> so a quiet answer is never mistaken for a guarantee.</td></tr>

@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, readdirSync, utimesSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -74,6 +74,31 @@ test("elevator outages come through the same cache", () => {
   const r = run(["get_accessibility_outages", JSON.stringify({ station: "Port Authority" })], env);
   assert.equal(r.code, 0, r.err);
   assert.ok(JSON.parse(r.out).outage_count > 0);
+});
+
+test("include_accessibility reads two feeds, and a cached rerun keeps both fetch times", () => {
+  const env = freshCache();
+  const args = [
+    "check_route_on_date",
+    JSON.stringify({ route_id: "F", date: "2026-09-28", stop_id: "F01", include_accessibility: true }),
+  ];
+  const first = run(args, { ...env, FIXTURE_FETCH: "serve" });
+  assert.equal(first.code, 0, first.err);
+  assert.equal(readFileSync(env.FIXTURE_FETCH_LOG, "utf8").trim().split("\n").length, 2);
+  const a = JSON.parse(first.out);
+  assert.equal(a.accessibility_outages.outage_count, 3);
+
+  // Age the cached copies by 30 seconds, still inside the 60-second TTL.
+  const savedAt = new Date(Date.now() - 30_000);
+  for (const f of readdirSync(env.MTA_SKILL_CACHE_DIR)) {
+    if (f.endsWith(".json")) utimesSync(join(env.MTA_SKILL_CACHE_DIR, f), savedAt, savedAt);
+  }
+  const second = run(args, { ...env, FIXTURE_FETCH: "block" });
+  assert.equal(second.code, 0, second.err);
+  const b = JSON.parse(second.out);
+  // Both fetch times are the cached copies' age, not the time of this run.
+  assert.ok(Math.abs(Date.parse(b.fetched_at) - savedAt.getTime()) <= 1000);
+  assert.ok(Math.abs(Date.parse(b.accessibility_outages.fetched_at) - savedAt.getTime()) <= 1000);
 });
 
 test("bad JSON arguments exit 2 with an example", () => {

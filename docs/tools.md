@@ -37,6 +37,12 @@ Every tool that reads a live feed adds these fields:
 
 `resolve_station` reads no feed, so it has a `station_data` block instead.
 
+Answers that use a bundled data.ny.gov snapshot also carry `ada_data` (station
+ADA status) or `inventory_data` (the elevator and escalator inventory):
+`data_pulled_at`, `source_url`, and a note on what the data does and doesn't
+say. Those snapshots are never fetched at runtime. See
+[data-sources.md](data-sources.md).
+
 ## The alert fields
 
 `check_route_on_date` and `get_service_alerts` describe each alert with these
@@ -101,6 +107,7 @@ Is a route disrupted on a date, optionally at one station?
 | `date` | string | yes | `YYYY-MM-DD` |
 | `stop_id` | string | no | GTFS parent-station id. Wins over `station` if you pass both |
 | `station` | string | no | Station name, matched among the stations `route_id` serves |
+| `include_accessibility` | boolean | no | Also list elevator and escalator outages at the station that day. Needs `stop_id` or `station`. One extra request, so it's off by default |
 
 ### How the station is found
 
@@ -119,7 +126,7 @@ Is a route disrupted on a date, optionally at one station?
 |---|---|
 | `route_id`, `date` | What you asked |
 | `disrupted` | `true` if any relevant alert counts as a disruption |
-| `station` | `{stop_id, stop_name, routes}` for the station used, or `null` |
+| `station` | `{stop_id, stop_name, routes, accessibility}` for the station used, or `null`. `accessibility` is MTA's ADA status; see [docs/accessibility.md](accessibility.md#station-accessibility) |
 | `station_matched_by` | `"stop_id"`, `"station name, narrowed to route …"`, or `null` |
 | `station_serves_route` | Whether that station is on this route in MTA's schedule data. `null` with no station |
 | `station_level_detail` | `true` only if there was at least one alert and every one named its stations |
@@ -127,6 +134,8 @@ Is a route disrupted on a date, optionally at one station?
 | `alert_count` | Alerts on this route that day |
 | `unknown_alert_types` | Statuses this server didn't recognize. Non-empty means the effect table needs updating |
 | `alerts` | The alerts, with the [alert fields](#the-alert-fields) plus the three below |
+| `accessibility_note` | With a station, what `station.accessibility` means and doesn't. Otherwise `null` |
+| `accessibility_outages` | With `include_accessibility: true`, the station's elevator and escalator outages that day, with MTA's alternate routes. Otherwise `null`. Fields in [docs/accessibility.md](accessibility.md#elevators-in-check_route_on_date) |
 
 Extra fields on each alert:
 
@@ -151,9 +160,10 @@ with no `disrupted` field:
 |---|---|
 | `resolved` | `false` |
 | `reason` | Which case this is: no station has that name, the name exists but not on this route, or several stations on this route tie |
-| `candidates` | The matching stations, with their routes and scores |
+| `candidates` | The matching stations, with their routes, scores, and ADA status |
 
-Pick one and call again with its `stop_id`.
+Pick one and call again with its `stop_id`. With `include_accessibility`, no
+elevator request is made until the station is resolved.
 
 ## `get_service_alerts`
 
@@ -221,9 +231,18 @@ most 10 are returned.
 | `query`, `route_id` | What you asked |
 | `match_count` | Candidates returned (at most 10) |
 | `unambiguous` | `true` if there's one candidate, or the first scores higher than the second |
-| `candidates` | `{stop_id, stop_name, lat, lon, routes, score}`, best first |
+| `candidates` | `{stop_id, stop_name, lat, lon, routes, score, accessibility}`, best first |
 | `note` | What to do when it's ambiguous, otherwise `null` |
 | `station_data` | When and where the station list came from: `generated_at`, `source_url`, `station_count`, `route_membership`, and a note |
+| `ada_data` | When and where the ADA status came from, and what it means |
+
+`accessibility` is `{status, mta_notes}`, plus `accessible_direction` for a
+partially accessible station: MTA's label for that side, like `"Manhattan"`.
+Lead with `mta_notes`. `status` is `fully_accessible`,
+`partially_accessible`, `not_accessible`, or `unknown`. At 14 St-Union Sq, the
+4/5/6 station is `not_accessible` and the other two are `fully_accessible`,
+because the status is per station. Full detail in
+[docs/accessibility.md](accessibility.md#station-accessibility).
 
 `routes` comes from MTA's regular schedule, so it can include more than the
 map shows. `628` (68 St–Hunter College) lists the 4, because the 4 runs local
@@ -237,7 +256,7 @@ in [docs/accessibility.md](accessibility.md).
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `station` | string | no | Station name, matched loosely |
-| `stop_id` | string | no | GTFS parent-station id. Its name is looked up, then matched loosely, including a shorter feed name on a shared route. Rows on routes the station doesn't serve move to `other_station_outages` |
+| `stop_id` | string | no | GTFS parent-station id. Rows are placed by equipment ID from MTA's inventory, with name matching as a fallback. Outages elsewhere in the station's complex go to `complex_outages`, and name matches that belong to another station to `other_station_outages` |
 | `route_id` | string | no | Only rows whose `trainno` includes this route. `6X`, `7X`, and `FX` count as `6`, `7`, and `F`; `GS`, `FS`, and `H` count as `S` |
 | `date` | string | no | `YYYY-MM-DD`. Outages in effect now or scheduled whose window overlaps that day in New York time |
 | `upcoming` | boolean | no | `false` (default) for outages in effect now, `true` for scheduled ones |
@@ -246,11 +265,17 @@ in [docs/accessibility.md](accessibility.md).
 accepted with `date`. A date query reads the current feed alone, which relies on
 that feed containing every scheduled outage; MTA doesn't document that.
 
-Alongside MTA's rows, the answer has `date`, `route_id`,
-`route_tokens_matched`, `route_note`, `rows_without_station`, `no_match_note`,
-`date_caveats`, and `other_station_outages`. Each is described in
+Each outage row is MTA's row plus, where they apply, `matched_by`
+(`"equipment id"`, `"name"`, or `"partial name"`), `match_note`, and
+`inventory` (`stop_ids`, `ada_compliant`, `redundant_elevator`,
+`alternative_route`). Fields with nothing to say are left out, and
+`inventory` comes only with `station` or `stop_id`. Alongside the rows,
+the answer has `date`, `route_id`, `route_tokens_matched`, `route_note`,
+`station_accessibility`, `rows_without_station`, `no_match_note`,
+`date_caveats`, `complex_outages`, `other_station_outages`, `inventory_data`,
+and `ada_data`. Each is described in
 [docs/accessibility.md](accessibility.md#the-answer).
 
-**Before relying on it:** a search can still miss a station MTA spells in a
-way we haven't seen, and the dates are MTA's estimates. Read the
-[gaps](accessibility.md#gaps) first.
+**Before relying on it:** no listed outage doesn't mean a station is usable,
+the ADA status and alternate routes come from dated snapshots, and the dates
+are MTA's estimates. Read the [gaps](accessibility.md#gaps) first.

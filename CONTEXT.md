@@ -39,6 +39,54 @@ Several parent stations a rider can transfer between without leaving fare contro
 
 **Different names, linked only by `transfers.txt`.** There are 60 such pairs, including `Times Sq-42 St (127)` ↔ `42 St-Port Authority Bus Terminal (A27)` and `Park Place (228)` ↔ `World Trade Center (E01)`. **We don't model these.** Asking about one name won't surface alerts filed against its connected neighbor. The README documents the gap. We haven't coded around it because BetaNYC's use hasn't needed it.
 
+### MRN (Master Reference Number)
+
+MTA's own internal ids for stations and complexes, used across its data.ny.gov
+datasets. **They are not GTFS ids.**
+
+- **Station MRN**: `station_id` in the station dataset (`39hk-dx4f`),
+  `station_mrn` in the equipment inventory (`94fv-bak7`).
+- **Complex MRN**: `complex_id` in the station dataset, `station_complex_mrn`
+  in the inventory.
+
+The inventory zero-pads MRNs (`"026"`) and the station dataset doesn't
+(`"26"`). **Compare them as integers.** As strings, 645 of 759 inventory rows
+join; as integers, 736. Three station MRNs are two GTFS stations each (W 4 St,
+145 St, Queensboro Plaza), so an MRN maps to a list of `stop_id`s.
+
+### Equipment code
+
+MTA's id for one elevator or escalator: `EL433`, `ES258X`. It's `equipment` in
+the outage feed and `equipment_code` in the inventory, and it's the only ID the
+outage feed gives. Joining it to the inventory, then the inventory's station
+MRN to a `stop_id`, is how we place an outage at a station without trusting its
+free-text `station` name. See [docs/data-sources.md](docs/data-sources.md#how-they-join).
+
+### ADA status: station vs. complex
+
+MTA publishes accessibility per station (`39hk-dx4f`) and per complex
+(`5f5g-n3cz`). **We use per station, always.** In 7 complexes the stations
+differ. At 14 St-Union Sq, the L and N/Q/R/W stations are accessible and the
+4/5/6 station (`635`) isn't, so a complex-level answer would be wrong for
+someone at the 6 platform.
+
+| `ada` | our `status` | means |
+|---|---|---|
+| `1` | `fully_accessible` | accessible in both directions |
+| `2` | `partially_accessible` | accessible in **one direction only**, per `ada_northbound`/`ada_southbound`. All 9 in the 2026-09-22 snapshot. MTA's `ada_notes` can narrow it further ("Uptown local only") |
+| `0` | `not_accessible` | no accessible path |
+
+An ADA status is a designation, not a working state. An elevator outage can
+make a `fully_accessible` station unusable, and no listed outage doesn't make
+it usable. **Never infer station accessibility from elevators:** four
+`not_accessible` stations have ADA-compliant elevators in the inventory.
+
+Equipment is coded to one station even inside a complex. The Port Authority
+elevator EL290X is coded to 42 St-Port Authority (`A27`), so a `stop_id` query
+for Times Sq-42 St (`127`) lists it in `complex_outages`. "Outages at this
+station" and "outages in this complex" are different lists, and the tool
+returns both.
+
 ## Alerts
 
 ### Entity
@@ -104,7 +152,11 @@ So every response includes `station_level_detail`, which reports whether MTA tag
 | Subway service alerts | `api-endpoint.mta.info/Dataservice/mtagtfsfeeds/camsys%2Fsubway-alerts.json` | No key. Published at [api.mta.info](https://api.mta.info/#/serviceAlerts) |
 | Elevator/escalator outages | `…/nyct%2Fnyct_ene.json`, `…/nyct%2Fnyct_ene_upcoming.json` | Flat JSON arrays, not GTFS-RT. `station` is free text rather than a `stop_id` |
 | Static GTFS | `rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip` | Build-time only, via `scripts/update-stations.mjs`. Never fetched at runtime |
+| Station ADA status | data.ny.gov `39hk-dx4f` | Build-time only, via `scripts/update-accessibility-data.mjs`, into `data/station_ada.json`. OPEN-NY terms |
+| Elevator and escalator inventory | data.ny.gov `94fv-bak7` | Build-time only, same script, into `data/equipment.json`. Asset list, not outage status. OPEN-NY terms |
 | MTA's own feed documentation | [github.com/nymta/gtfs-documentation](https://github.com/nymta/gtfs-documentation) | Sparse, and doesn't always match the live feed. See the README on the entity-id status rank |
 | Terms | [mta.info/developers/terms-and-conditions](https://www.mta.info/developers/terms-and-conditions) | Why this is not on npm: [docs/terms-compliance.md](docs/terms-compliance.md) |
+
+All of it, with join coverage and terms: [docs/data-sources.md](docs/data-sources.md).
 
 Nothing here needs an API key. Bus Time, for live bus positions and arrivals, is the one MTA product that needs an account, and it's out of scope.

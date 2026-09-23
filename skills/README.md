@@ -16,8 +16,9 @@ node skills/mta-subway/scripts/mta.mjs --help
 ```
 
 The script runs the server's own code from `dist/`, so both give the same
-answers, including the station matching, the alert classification, and the
-disclaimers. It adds a 60-second cache on disk so repeat questions reuse one
+answers, including the station matching, the alert classification, the
+station ADA status and alternate routes, and the disclaimers. The ADA status
+and alternate routes come from snapshots in `data/`, so they add no request. It adds a 60-second cache on disk so repeat questions reuse one
 download. The server's cache lives in memory, and each script run is a new
 process.
 

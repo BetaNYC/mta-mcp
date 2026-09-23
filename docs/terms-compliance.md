@@ -85,3 +85,13 @@ quote.
 
 MTA can also change these terms or shut off the feeds at any time, without
 notice. If you use this for event-day travel, keep a manual fallback.
+
+## The bundled data.ny.gov snapshots
+
+The station ADA status and the elevator and escalator inventory come from
+MTA's datasets on data.ny.gov, not from MTA's feed servers. They're under the
+[OPEN-NY Terms of Use](https://data.ny.gov/dataset/OPEN-NY-Terms-Of-Use/77gx-ii52),
+a separate document. We bundle dated snapshots in `data/`, generated offline,
+and the server never fetches them, so nothing about them changes the npm
+reasoning above. The obligations to call the output unofficial and possibly
+stale apply to them too. Details in [data-sources.md](data-sources.md#terms).

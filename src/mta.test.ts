@@ -27,6 +27,12 @@ import {
   scoreStation,
   stationById,
   todayIso,
+  STATION_ADA,
+  EQUIPMENT,
+  adaElevatorsAt,
+  complexStopIds,
+  equipmentByCode,
+  stationAccessibility,
 } from "./mta.js";
 
 // Nothing in this file touches the network. It exercises pure functions only.
@@ -358,11 +364,14 @@ test("feedNameWithin needs a word that is not a number or a street type", () => 
 
 test("a shorter feed name goes to the closest station on the shared route", () => {
   const row = { station: "Cortlandt St", trainno: "1" };
-  assert.equal(eneRowWithinStation("138", row), true); // WTC Cortlandt, 1 word over
-  assert.equal(eneRowWithinStation("101", row), false); // Van Cortlandt Park-242 St
-  assert.equal(eneRowWithinStation("R25", row), false); // no shared route
-  assert.equal(eneRowWithinStation("138", { station: "Cortlandt St", trainno: "" }), false);
-  assert.equal(eneRowWithinStation("138", { trainno: "1" }), false);
+  assert.deepEqual(eneRowWithinStation("138", row), { closest: true, closer_stop_ids: [] }); // WTC Cortlandt, 1 word over
+  // Van Cortlandt Park-242 St is a candidate too, four words over. It is kept
+  // as a candidate, flagged, rather than dropped: a closest-name tie-break is
+  // not strong enough evidence to hide an outage.
+  assert.deepEqual(eneRowWithinStation("101", row), { closest: false, closer_stop_ids: ["138"] });
+  assert.equal(eneRowWithinStation("R25", row), null); // no shared route
+  assert.equal(eneRowWithinStation("138", { station: "Cortlandt St", trainno: "" }), null);
+  assert.equal(eneRowWithinStation("138", { trainno: "1" }), null);
 });
 
 test("trainno splits on slashes, commas, and spaces", () => {
@@ -469,4 +478,52 @@ test("an outage still listed after its estimated return is treated as ongoing", 
   // Fetched before the estimate, the estimate is trusted.
   const early = Date.parse("2026-09-17T09:00:00Z");
   assert.equal(eneOverlapsEtDay(overdue, "2026-09-25", early).overlaps, false);
+});
+
+// ─── Station accessibility and the equipment inventory ──────────────────────
+
+test("pl reads as place in the elevator feed, like pk as park", () => {
+  // GTFS itself writes both "Park Pl" (S03) and "Park Place" (228).
+  assert.deepEqual(eneTokens("Astor Pl"), ["astor", "place"]);
+  assert.equal(scoreEneStation("Park Place", "Park Pl"), 100);
+  // resolve_station is untouched.
+  assert.equal(scoreStation("Astor Place", "Astor Pl"), 0);
+});
+
+test("a stop_id missing from the ADA snapshot is unknown, never not accessible", () => {
+  assert.deepEqual(stationAccessibility("NOT-A-STATION"), { status: "unknown", mta_notes: null });
+});
+
+test("every bundled station has an ADA row, and every partial one a single direction", () => {
+  assert.equal(STATION_ADA.count, STATIONS.count);
+  for (const s of STATIONS.stations) {
+    const a = stationAccessibility(s.stop_id);
+    assert.notEqual(a.status, "unknown", s.stop_id);
+    if (a.status === "partially_accessible") {
+      // MTA's rider label, never a GTFS compass word.
+      assert.ok(a.accessible_direction, `${s.stop_id} has no direction label`);
+      assert.doesNotMatch(String(a.accessible_direction), /(north|south)bound/i, s.stop_id);
+      assert.ok(a.mta_notes, `${s.stop_id} has no MTA note`);
+    }
+  }
+});
+
+test("complexes come from MTA's complex MRN", () => {
+  assert.deepEqual(complexStopIds("635").sort(), ["L03", "R20"]);
+  assert.deepEqual(complexStopIds("F01"), []);
+});
+
+test("equipment codes resolve to stop_ids, including an MRN shared by two", () => {
+  assert.deepEqual(equipmentByCode("EL433")?.stop_ids, ["F01"]);
+  // W 4 St is one MRN (167) and two GTFS stations.
+  assert.deepEqual(equipmentByCode("EL333")?.stop_ids, ["A32", "D20"]);
+  assert.equal(equipmentByCode("EL-NOPE"), null);
+  assert.equal(equipmentByCode(undefined), null);
+  assert.ok(EQUIPMENT.count > 700);
+});
+
+test("ADA elevators at a stop_id, for wording only", () => {
+  // 149 St-Hostos is listed not accessible and still has ADA-compliant elevators.
+  assert.deepEqual(adaElevatorsAt("415").sort(), ["EL100", "EL101", "EL102"]);
+  assert.deepEqual(adaElevatorsAt("103"), []);
 });

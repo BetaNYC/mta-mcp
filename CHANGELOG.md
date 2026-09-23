@@ -40,8 +40,42 @@ This package is not published to npm. Version numbers track the local build. See
 - `rows_without_station`: a row with no `station` name is kept in a name
   search and counted, since it can't be ruled out.
 - 27 tests covering these additions and the changes and fixes below.
+- Station ADA status. Every station in `resolve_station` and
+  `check_route_on_date`, and in `get_accessibility_outages` with a `stop_id`,
+  carries MTA's status: `fully_accessible`, `partially_accessible` with the
+  one direction that is and MTA's note, or `not_accessible`. It's per station,
+  not per complex, from a bundled snapshot of data.ny.gov `39hk-dx4f`
+  (`data/station_ada.json`), which matches all 496 stations.
+- Alternate routes. Each outage row carries an `inventory` block from MTA's
+  elevator and escalator inventory, data.ny.gov `94fv-bak7`
+  (`data/equipment.json`): where the equipment is, `ada_compliant`,
+  `redundant_elevator`, and MTA's `alternative_route`. Answers say the text is
+  kept by hand and can lag.
+- `get_accessibility_outages` with a `stop_id` places rows by equipment ID
+  first, with name matching as the fallback for rows the inventory doesn't
+  cover. Each row says how it matched in `matched_by`: `"equipment id"`,
+  `"name"`, or `"partial name"`. Outages elsewhere in the station's complex
+  are listed in `complex_outages`. Against the saved feeds, 13 name-only
+  pairings that were wrong move to `other_station_outages`, and 3 rows name
+  matching missed are found.
+- `check_route_on_date` takes `include_accessibility: true`, which adds the
+  station's elevator and escalator outages that day, with alternate routes,
+  for one extra request. It needs a station and is off by default.
+- `scripts/update-accessibility-data.mjs` (`npm run accessibility-data`)
+  regenerates both snapshots from data.ny.gov in two requests, or from saved
+  responses with `--from-dir`, and records the query, pull time, and terms in
+  each file.
+- `docs/data-sources.md`: every data source, what it provides, how they join,
+  coverage, terms, refresh cadence, and how to regenerate.
+- 27 tests for the ADA status, the ID join, the complex and fallback cases,
+  `include_accessibility`, the generator, and the committed snapshots.
 
 ### Changed
+
+- `get_accessibility_outages` with a `stop_id` returns different rows than
+  before in 13 station-row pairings in the saved feeds, all moved to
+  `other_station_outages`, because MTA's inventory places that equipment at
+  another station. Each outage row has three new fields after MTA's.
 
 - Rewrote the README, CONTRIBUTING, CONTEXT, terms-compliance, and landing page
   in BetaNYC's voice. Facts are unchanged except where they disagreed: the npm
@@ -64,6 +98,24 @@ This package is not published to npm. Version numbers track the local build. See
   one of the 126 rows in the saved current feed can now be reached from some
   `stop_id`, up from 125.
 - `trainno` is split on commas and spaces as well as slashes.
+- A shorter feed name that fits two stations on the same route no longer goes
+  only to the closer one. The other gets it too, with a `match_note` naming
+  the closer station, so a name tie-break can't hide an outage.
+- An empty outage answer at a station MTA lists as not accessible no longer
+  says "there may be no elevator" when the inventory codes ADA-compliant
+  elevators there (149 St-Hostos, 14 St-Union Sq's 4/5/6 station,
+  42 St-Bryant Pk, Fresh Pond Rd). It names them, and every empty answer
+  keeps the line that a missing outage isn't proof the station is usable.
+- A partially accessible station's direction uses MTA's rider label
+  (`"Manhattan"`), never GTFS's nominal "northbound" or "southbound".
+- Outage rows leave out `matched_by`, `match_note`, and `inventory` when they
+  have nothing to say, and carry `inventory` only with a station filter. The
+  unfiltered answer on the saved feed is about 29,000 characters, near its old
+  size, where carrying alternate routes on every row had doubled it.
+- `pl` reads as `place` in elevator-feed matching, like `pk` as `park`. MTA's
+  station list has both `Park Pl` and `Park Place`.
+- The skill script now reports the real fetch time of the elevator feed in
+  `accessibility_outages` when it answers from its disk cache.
 - Docs: removed claims we couldn't source, including the size of MTA's
   developer support and what other subway MCP servers do, which now describes
   only what their READMEs say.
