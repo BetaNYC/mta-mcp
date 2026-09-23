@@ -97,7 +97,8 @@ if (result.isError) {
   process.exit(1);
 }
 
-// Compact JSON costs fewer tokens than the server's indented output.
+// The server already returns compact JSON. It is parsed here only so fetched_at
+// can be corrected below, then printed compact again.
 const payload = JSON.parse(text);
 // A disk-cache hit looks fresh to the server code, so put the real fetch time
 // back. The staleness disclosure MTA's terms require depends on it.

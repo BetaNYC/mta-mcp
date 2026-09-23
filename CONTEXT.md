@@ -33,9 +33,9 @@ A physical stretch of track, named for the street it runs under, like the Lexing
 
 ### Station complex
 
-Several parent stations a rider can transfer between without leaving fare control. In the data they're separate stations, and they come in two kinds. This server handles only the first.
+Several parent stations a rider can transfer between without leaving fare control. In the data they're separate stations. Two naming problems sit next to this idea, and this server handles only the first.
 
-**Same name, several IDs.** 193 of 496 parent stations share a name with another, across 76 distinct names. `125 St` is four stations on four unrelated lines: `116` (1), `225` (2/3), `621` (4/5/6/6X), and `A15` (A/B/C/D). `Times Sq-42 St` is four. `14 St` is three. This is why `resolve_station` returns every candidate and never picks, and why the `route_id` filter has to work.
+**Same name, several stations.** This one is usually not a complex at all. 193 of 496 parent stations share a name with another, across 76 distinct names. `125 St` is four stations on four unrelated lines: `116` (1), `225` (2/3), `621` (4/5/6/6X), and `A15` (A/B/C/D). `Times Sq-42 St` is four. `14 St` is three. This is why `resolve_station` returns every candidate and never picks, and why the `route_id` filter has to work.
 
 **Different names, linked only by `transfers.txt`.** There are 60 such pairs, including `Times Sq-42 St (127)` ↔ `42 St-Port Authority Bus Terminal (A27)` and `Park Place (228)` ↔ `World Trade Center (E01)`. **We don't model these.** Asking about one name won't surface alerts filed against its connected neighbor. The README documents the gap. We haven't coded around it because BetaNYC's use hasn't needed it.
 

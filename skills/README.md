@@ -28,7 +28,7 @@ process.
 | Works in chat apps like Claude Desktop | Yes | No. The agent must be able to run commands |
 | Works in other AI tools that support MCP | Yes | Mostly Claude only |
 | Always-on cost per conversation | About 1,000 tokens for the tool descriptions | A one-line description. The full instructions load only when used |
-| Size of a typical answer | About 1,000–2,000 tokens | About 25–30% smaller (compact JSON) |
+| Size of a typical answer | Compact JSON, often under 2,000 tokens | The same |
 | Spacing out requests to MTA | Enforced across every call | Enforced within a run. The disk cache covers repeat questions, but two runs at the same moment could both fetch |
 
 Use the MCP if you work in a chat app or want the strongest rate limiting. Use

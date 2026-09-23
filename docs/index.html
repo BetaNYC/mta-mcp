@@ -154,7 +154,7 @@ Tool names and response shapes may change without notice.
 <a href="https://mta.info/alerts">mta.info</a> or any transit app. They're free, official,
 and faster than this.</p>
 <p>This server is for a narrower question: <strong>a future date, a specific station, and a yes
-or no you'd put in an email to 3,000 people.</strong> That's tedious to check by hand and easy
+or no you'd put in an email to everyone coming.</strong> That's tedious to check by hand and easy
 to get wrong.</p>
 
 <h2>Simple first: which station did you mean?</h2>
@@ -254,8 +254,9 @@ so this answer holds until MTA renames a station.</div>
 
 <div class="warnbox"><b>Why this matters.</b> A check that asks <em>"is my station mentioned
 in any alert?"</em> reports a disruption here that doesn't exist, because the alert mentioning
-68 St is added service. Every other NYC subway MCP we looked at treats all of these as one generic
-"service change." This server classifies on MTA's <code>alert_type</code> instead.</div>
+68 St is added service. None of the four NYC subway MCPs listed below says in its README that it
+tells added service apart from reduced service. This server classifies on MTA's
+<code>alert_type</code> instead.</div>
 
 <h2>What it cannot do</h2>
 
@@ -272,6 +273,10 @@ in any alert?"</em> reports a disruption here that doesn't exist, because the al
   <tr><td>"Are Times Sq and Port Authority connected?"</td>
       <td>Stations linked only by transfer, under different names, are not modeled. 60 such pairs
           exist. Asking about one name will not surface alerts filed against the other.</td></tr>
+  <tr><td>"Is this station accessible?"</td>
+      <td>Not yet. The station list doesn't include accessibility status. MTA's
+          <a href="https://www.mta.info/elevator-escalator-status">elevator and escalator status
+          page</a> does.</td></tr>
   <tr><td>"Is my station definitely fine?"</td>
       <td>MTA tags stations only when it considers the change significant. Every response carries
           <code>station_level_detail</code> so a quiet answer is never mistaken for a guarantee.</td></tr>
@@ -289,6 +294,7 @@ because of MTA's data terms.</p>
 non-MTA server. Accordingly, you will download and store the MTA data feed on a non-MTA server
 <strong>which users of your app will access in order to obtain data</strong>. MTA prohibits the
 development of an app that would make the data available to others directly from MTA's server(s)."
+(Emphasis ours.)
 </blockquote>
 
 <p>A published package would have every user's machine fetch straight from
@@ -410,8 +416,9 @@ and all of them do <strong>live arrivals</strong>, which this server doesn't. If
 </table>
 
 <p><strong>What this server adds:</strong> it takes a <em>date</em>. The servers above answer
-about right now. None of them accepts a future date, and none separates service that got worse
-from service that got better at a station. That's the gap this server fills.</p>
+about right now. Of the four, none documents a date parameter in its README, and none says it
+separates service that got worse from service that got better at a station. That's the gap this
+server fills.</p>
 
 <h2>Community</h2>
 
@@ -430,7 +437,7 @@ from service that got better at a station. That's the gap this server fills.</p>
     <td>A feed field is undocumented, an alert looks wrong, MTA's API behaves oddly</td>
     <td><a href="https://groups.google.com/g/mtadeveloperresources"><strong>MTA Developer
         Google Group</strong></a><br>
-        <span class="small">MTA has no developer support team, but it watches this group. You'll
+        <span class="small">MTA points developers to this public Google Group. You'll
         get a better answer there than in our tracker, and it helps everyone else building on the
         same feeds. It's also where we'd take the open questions in "What we could not verify"
         above.</span></td>
@@ -472,8 +479,8 @@ server.</div>
 <p>Data from the <a href="https://api.mta.info/#/serviceAlerts">MTA service alerts feed</a>,
 free to use under MTA's terms. Station names from MTA's published static GTFS. MTA's own
 implementation notes live at
-<a href="https://github.com/nymta/gtfs-documentation">nymta/gtfs-documentation</a>, which is
-sparse but is MTA's only published source on how these feeds behave.</p>
+<a href="https://github.com/nymta/gtfs-documentation">nymta/gtfs-documentation</a>, alongside
+MTA's developer pages.</p>
 <h3>About BetaNYC</h3>
 
 <p><a href="https://beta.nyc"><strong>BetaNYC</strong></a> builds and maintains this project.

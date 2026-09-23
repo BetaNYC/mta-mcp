@@ -1,6 +1,6 @@
 ---
 name: mta-subway
-description: Check NYC subway service alerts for a date and station, look up stations, and find elevator or escalator outages, using MTA's public feeds. Use when someone asks whether a subway line is running normally on a date, whether a station is affected by planned work, what is happening on a line this weekend, which station a name like "125 St" means, or whether elevators work at a station. Also use before putting subway directions in event copy.
+description: Check NYC subway service alerts for a date and station, look up stations, and find elevator or escalator outages, using MTA's public feeds. Use when someone asks whether a subway line is running normally on a date, whether a station is affected by planned work, what is happening on a line this weekend, which station a name like "125 St" means, or whether elevators are out at a station. Also use before putting subway directions in event copy.
 ---
 
 # MTA subway alerts
@@ -37,16 +37,17 @@ Run it from this skill's folder, or use the full path to `scripts/mta.mjs`.
 | Is this route disrupted on this date, at this station? | `check_route_on_date` | `'{"route_id":"6","date":"2026-09-26","station":"68 St-Hunter College"}'` |
 | What's going on with a route on a date? | `get_service_alerts` | `'{"route_id":"6","date":"2026-09-26"}'` |
 | Which station does this name mean? | `resolve_station` | `'{"query":"125 St","route_id":"6"}'` |
-| Are the elevators working now? | `get_accessibility_outages` | `'{"station":"Jamaica-179 St"}'` |
+| Are any elevators or escalators out now? | `get_accessibility_outages` | `'{"station":"Jamaica-179 St"}'` |
 | Any elevator work scheduled? | `get_accessibility_outages` | `'{"station":"Jamaica-179 St","upcoming":true}'` |
+| Any outages on this date? | `get_accessibility_outages` | `'{"stop_id":"F01","date":"2026-09-28"}'` |
 
 - Dates are `YYYY-MM-DD`, in New York time.
 - `route_id` is how MTA writes the route: `"6"`, `"A"`, `"SI"`. The diamond 6
   is `"6X"`, and the 7 express is `"7X"`.
 - A "line" is several routes. For "the Lexington Avenue line," check the 4, 5,
   6, and 6X one at a time.
-- Always pass a date. Leaving it off `get_service_alerts` returns every alert on
-  every route today, which is about 20,000 tokens.
+- Pass a `route_id`. Without one, `get_service_alerts` returns every alert on
+  every route, about 20,000 tokens on 2026-09-22.
 
 ## Reading the answer
 
@@ -70,18 +71,22 @@ Check these before you tell anyone a train is fine:
 `get_accessibility_outages` needs the most care, because a wrong "no outages"
 can strand someone who uses a wheelchair.
 
-- **Check both current and upcoming.** `upcoming: false` (the default) returns
-  outages in effect now. For an event date, also run it with `upcoming: true`
-  and compare each row's `outagedate` and `estimatedreturntoservice` to the
-  event date yourself. The tool doesn't filter by date.
-- **Zero results is not proof.** MTA names stations its own way here, and
-  sometimes differently from the station list. `"Bedford Park Blvd"` finds
-  nothing, but MTA's row says `"Bedford Pk Blvd"`. Before saying a station has
-  no outages, also try a short, distinctive part of the name (`"Bedford"`,
-  `"Port Authority"`, `"Van Wyck"`) and check the `station` and `trainno` of
-  what comes back.
-- **Same name, different stations.** `"125 St"` can return an outage at a
-  different 125 St. Check the row's `trainno` against the route you mean.
+- **For an event, pass the date.** `date` returns every outage, in effect now
+  or scheduled, whose window overlaps that day. Don't combine it with
+  `upcoming: true`; that's an error. Rows whose dates can't be trusted are
+  still returned and listed in `date_caveats`. Mention them.
+- **Zero results is not proof.** MTA names stations its own way here. The
+  script handles the spellings we've seen, like `"Bedford Pk Blvd"` and
+  `"Cortlandt St"` for WTC Cortlandt, but new ones can appear. An empty station
+  or route search has a `no_match_note`. When you see it, also try a short,
+  distinctive part of the name (`"Port Authority"`, `"Van Wyck"`) and check the
+  `station` and `trainno` of what comes back.
+- **Same name, different stations.** Use `stop_id` when you can. Rows at a
+  same-named station on other routes move to `other_station_outages`. With a
+  name alone, `"125 St"` can return an outage at a different 125 St, so check
+  each row's `trainno`.
+- **`route_id`** filters by the row's `trainno`. `6X` counts as `6`, and every
+  shuttle (`GS`, `FS`, `H`) counts as `S`, which the feed doesn't tell apart.
 - **`ADA: "Y"`** means the elevator is part of the station's accessible path,
   per MTA. An outage on one of these can make the station unusable for
   wheelchair users. Say that plainly.

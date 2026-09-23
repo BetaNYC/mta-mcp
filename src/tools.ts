@@ -4,17 +4,22 @@ import {
   type AlertEntity,
   type AlertsFeed,
   type Effect,
+  type EneDateCaveat,
   type EneOutage,
   type InformedEntity,
   DATA_SOURCE,
   DISCLAIMER,
   EFFECT_BY_ALERT_TYPE,
+  ENE_CURRENT_URL,
   SUBWAY_ALERTS_URL,
   STATIONS,
   assertIsoDate,
   cacheTtlMs,
   effectFor,
   eneFeedUrl,
+  eneOverlapsEtDay,
+  eneRouteTokens,
+  eneRowWithinStation,
   englishText,
   fetchFeed,
   filterEneRows,
@@ -24,7 +29,8 @@ import {
   resolveStationMatches,
   resolveStationStrict,
   assertRouteFilterAvailable,
-  scoreStation,
+  rowMatchesRouteTokens,
+  scoreEneStation,
   stationById,
   stationName,
   todayIso,
@@ -119,7 +125,7 @@ export const TOOLS = [
   {
     name: "get_accessibility_outages",
     description:
-      "Elevator and escalator outages in the subway, current or upcoming. MTA reports these with a free-text station name rather than a stop_id, so station matching is by name and is reported as such.",
+      "Elevator and escalator outages in the subway: in effect now, scheduled, or overlapping one date. MTA names stations in free text rather than by stop_id, so station matching is by name and is reported as such. Zero matches is not proof of no outage; read no_match_note.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -127,12 +133,23 @@ export const TOOLS = [
         station: { type: "string", description: "Station name as free text, matched loosely." },
         stop_id: {
           type: "string",
-          description: "GTFS parent-station id; its name is looked up and then matched loosely.",
+          description:
+            "GTFS parent-station id. Its name is looked up and matched loosely, including feed names shorter than the GTFS name when the row shares a route with the station. Rows whose trainno shares no route with the station are moved to other_station_outages.",
+        },
+        route_id: {
+          type: "string",
+          description:
+            "Only rows whose trainno includes this route, e.g. '6'. Express and shuttle ids are mapped to the names the feed uses: 6X to 6, 7X to 7, FX to F, and GS, FS, H to S.",
+        },
+        date: {
+          type: "string",
+          description:
+            "YYYY-MM-DD, New York time. Returns outages in effect now or scheduled whose window overlaps that day, from the current feed alone. Cannot be combined with upcoming:true.",
         },
         upcoming: {
           type: "boolean",
           description:
-            "false (default) returns outages in effect now; true returns scheduled future outages.",
+            "false (default) returns outages in effect now; true returns scheduled future outages. true cannot be combined with date.",
         },
       },
     },
@@ -157,6 +174,8 @@ const ARG_SHAPES = {
   get_accessibility_outages: {
     station: z.string().optional(),
     stop_id: z.string().optional(),
+    route_id: z.string().optional(),
+    date: z.string().optional(),
     upcoming: z.boolean().optional(),
   },
 };
@@ -456,9 +475,20 @@ function resolveStation(args: { query: string; route_id?: string }) {
 async function getAccessibilityOutages(args: {
   station?: string;
   stop_id?: string;
+  route_id?: string;
+  date?: string;
   upcoming?: boolean;
 }) {
-  const upcoming = args.upcoming ?? false;
+  if (args.date !== undefined && args.upcoming === true) {
+    // Two different questions. `date` already covers outages in effect now and
+    // scheduled ones, so honoring upcoming:true as well would mean silently
+    // ignoring one of them. upcoming:false is the default and is accepted.
+    throw new Error(
+      "get_accessibility_outages takes date or upcoming:true, not both. date returns every outage, in effect now or scheduled, whose window overlaps that day. Drop upcoming and call again."
+    );
+  }
+  const date = args.date !== undefined ? assertIsoDate(args.date) : null;
+  const upcoming = date ? null : args.upcoming ?? false;
 
   let query = args.station ?? null;
   let station = null;
@@ -472,34 +502,145 @@ async function getAccessibilityOutages(args: {
     query = station.stop_name;
   }
 
-  const url = eneFeedUrl(upcoming);
+  // A date query reads only the current feed, one request. That relies on the
+  // current feed carrying every scheduled outage: all 47 upcoming rows were in
+  // its 126 in the 2026-09-17 fixtures, but MTA does not document it. The
+  // payload's feed_note says so, as does docs/accessibility.md.
+  const url = date ? ENE_CURRENT_URL : eneFeedUrl(upcoming as boolean);
   const { body, fetchedAt } = await fetchFeed(url);
-  const rows = filterEneRows((body as EneOutage[]) ?? [], upcoming);
+  const all = (body as EneOutage[]) ?? [];
+  const rows = date ? all : filterEneRows(all, upcoming as boolean);
 
-  const matched = query
-    ? rows
-        .map((row) => ({ row, score: scoreStation(query as string, row.station ?? "") }))
+  // Date. Rows whose dates cannot be read are kept and listed in date_caveats.
+  // "Now" is when the feed was fetched: a row still listed then, after its
+  // estimated return, is overdue rather than fixed.
+  const caveatOf = new Map<EneOutage, EneDateCaveat>();
+  const byDate = date
+    ? rows.filter((row) => {
+        const { overlaps, caveat } = eneOverlapsEtDay(row, date, fetchedAt);
+        if (overlaps && caveat) caveatOf.set(row, caveat);
+        return overlaps;
+      })
+    : rows;
+
+  // Route. A row with no trainno cannot be ruled out, so it stays.
+  const routeTokens = args.route_id !== undefined ? eneRouteTokens(args.route_id) : null;
+  const byRoute = routeTokens
+    ? byDate.filter((row) => rowMatchesRouteTokens(row, routeTokens) !== false)
+    : byDate;
+
+  // Station name. A row with no station name cannot be ruled out, so it stays,
+  // like a row with no trainno, and is counted in rows_without_station.
+  // With a stop_id, a row whose shorter name sits inside the station's GTFS name
+  // ("Court Sq" for "Court Sq-23 St") also matches, if it shares a route.
+  const nameScore = (row: EneOutage): number => {
+    if (!row.station) return 1;
+    const forward = scoreEneStation(query as string, row.station);
+    if (forward > 0) return forward;
+    return station && eneRowWithinStation(station.stop_id, row) ? 20 : 0;
+  };
+  const named = query
+    ? byRoute
+        .map((row) => ({ row, score: nameScore(row) }))
         .filter((r) => r.score > 0)
         .sort((a, b) => b.score - a.score)
         .map((r) => r.row)
-    : rows;
+    : byRoute;
+  const withoutStation = query ? named.filter((row) => !row.station).length : null;
+
+  // With a stop_id we know the station's routes, so a same-named station on
+  // other lines ("125 St" on the 1 when you asked about A15) can be told apart.
+  // Those rows are moved aside, not dropped.
+  let outages = named;
+  let otherStation: EneOutage[] | null = null;
+  if (station) {
+    const stationTokens = [...new Set(station.routes.flatMap((r) => eneRouteTokens(r)))];
+    outages = named.filter((row) => rowMatchesRouteTokens(row, stationTokens) !== false);
+    otherStation = named.filter((row) => rowMatchesRouteTokens(row, stationTokens) === false);
+  }
+
+  // Caveats only for rows this answer actually returns.
+  const dateCaveats = date
+    ? [...outages, ...(otherStation ?? [])]
+        .filter((row) => caveatOf.has(row))
+        .map((row) => ({
+          equipment: row.equipment ?? null,
+          station: row.station ?? null,
+          outagedate: row.outagedate ?? null,
+          estimatedreturntoservice: row.estimatedreturntoservice ?? null,
+          caveat: caveatOf.get(row) as EneDateCaveat,
+        }))
+    : null;
 
   return {
     upcoming,
+    date,
     feed_url: url,
     query: query ?? null,
     stop_id: args.stop_id ?? null,
+    route_id: args.route_id ?? null,
+    route_tokens_matched: routeTokens,
+    route_note: routeTokens?.includes("S")
+      ? "MTA's elevator feed writes every shuttle as 'S' and does not say which one. Rows at another shuttle's stations may be included; check each row's station."
+      : null,
     matched_by: query
       ? "station name, matched loosely — MTA reports these outages with a free-text station name, not a GTFS stop_id, and the two spellings do not always agree"
       : null,
-    outage_count: matched.length,
+    outage_count: outages.length,
     rows_in_feed: rows.length,
-    feed_note: upcoming
-      ? "Scheduled future outages."
-      : "Outages in effect now. MTA's current feed also carries rows flagged isupcomingoutage 'Y'; those are excluded here and are what upcoming:true returns.",
-    outages: matched,
+    rows_without_station: withoutStation,
+    feed_note: date
+      ? `Outages in effect now or scheduled whose window overlaps ${date} in New York time. Read from MTA's current feed alone, which relies on that feed containing every scheduled outage. We counted that in our saved copy of both feeds, but MTA does not document it. outagedate and estimatedreturntoservice carry no time zone; they are read as New York time. See date_caveats for rows kept without a reliable window.`
+      : upcoming
+        ? "Scheduled future outages."
+        : "Outages in effect now. MTA's current feed also carries rows flagged isupcomingoutage 'Y'; those are excluded here and are what upcoming:true returns.",
+    no_match_note: noMatchNote(
+      query,
+      args.route_id ?? null,
+      outages.length,
+      otherStation?.length ?? 0,
+      rows,
+      date !== null
+    ),
+    date_caveats: dateCaveats,
+    outages,
+    other_station_outages: otherStation,
     ...provenance(fetchedAt),
   };
+}
+
+/**
+ * Why an elevator search came back empty, and what to try next. A zero from a
+ * name search is the answer most likely to be wrong, so it never goes out bare.
+ */
+function noMatchNote(
+  query: string | null,
+  routeId: string | null,
+  outageCount: number,
+  otherStationCount: number,
+  feedRows: EneOutage[],
+  dateFilter: boolean
+): string | null {
+  if (outageCount > 0 || (!query && !routeId)) return null;
+  const retry =
+    "Search again with a short, distinctive part of the name, like 'Port Authority' or 'Bedford', and check each row's station and trainno.";
+  if (query && otherStationCount > 0) {
+    return `'${query}' matched ${otherStationCount} row(s) whose trainno shares no route with this station, so they are probably a different station with the same name. They are in other_station_outages. MTA may also spell this station differently. ${retry}`;
+  }
+  const nameInFeed = query ? feedRows.some((r) => scoreEneStation(query, r.station ?? "") > 0) : false;
+  const routeInFeed = routeId
+    ? feedRows.some((r) => rowMatchesRouteTokens(r, eneRouteTokens(routeId)) === true)
+    : false;
+  if (routeId && !routeInFeed) {
+    return `No row in the feed lists route '${routeId}' in its trainno. That is not proof there is no outage: check the route id (the feed writes the diamond 6 as '6' and every shuttle as 'S'), or search by station instead.`;
+  }
+  if (query && nameInFeed && (dateFilter || routeId)) {
+    return `'${query}' matches outage rows in the feed, but none that pass the date or route filter. Run it again without the filter to see them.`;
+  }
+  if (query) {
+    return `No outage row matched '${query}'. That is not proof there is no outage: MTA's elevator feed spells some stations differently from the station list, and this server only normalizes the differences it has seen. ${retry}`;
+  }
+  return `No outage on route '${routeId}' passes the date filter. That is not proof there is no outage: the dates are MTA's estimates. Run it again without date to see every outage on the route.`;
 }
 
 // ─── Dispatch ────────────────────────────────────────────────────────────────
@@ -510,25 +651,25 @@ export async function callTool(name: string, args: unknown) {
       case "check_route_on_date": {
         const parsed = parseToolArgs("check_route_on_date", args);
         const result = await checkRouteOnDate(parsed);
-        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+        return { content: [{ type: "text", text: JSON.stringify(result) }] };
       }
 
       case "get_service_alerts": {
         const parsed = parseToolArgs("get_service_alerts", args);
         const result = await getServiceAlerts(parsed);
-        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+        return { content: [{ type: "text", text: JSON.stringify(result) }] };
       }
 
       case "resolve_station": {
         const parsed = parseToolArgs("resolve_station", args);
         const result = resolveStation(parsed);
-        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+        return { content: [{ type: "text", text: JSON.stringify(result) }] };
       }
 
       case "get_accessibility_outages": {
         const parsed = parseToolArgs("get_accessibility_outages", args);
         const result = await getAccessibilityOutages(parsed);
-        return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+        return { content: [{ type: "text", text: JSON.stringify(result) }] };
       }
 
       default:

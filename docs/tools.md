@@ -14,6 +14,9 @@ ever disagree, the code is right and this page needs fixing.
   naming it and listing the accepted ones. It is never silently ignored.
 - **Dates are `YYYY-MM-DD`** and read as a full day in New York time
   (midnight to midnight, America/New_York). Only the format is checked.
+- **Answers are compact JSON,** one line with no indentation, to save tokens.
+  In a sample of four answers from the fixtures, that cut 13 to 34 percent of
+  the characters.
 - **Errors come back as text starting with `Error:`,** with `isError: true`.
 - **Nothing is fetched until a tool is called,** and a fetched feed is reused
   for 60 seconds. See [Responsible use](../README.md#responsible-use).
@@ -55,9 +58,11 @@ fields:
 | `active_periods` | MTA's raw periods, as `{start, end}` in epoch seconds. A missing `start` or `end` means open-ended |
 
 An alert is active on a date if any of its periods overlaps that day in New
-York time. An alert with no periods at all is never counted. The GTFS-realtime
-spec says such an alert is always active, so this is a known gap. It hasn't
-mattered yet: all 159 alerts in the 2026-09-22 pull had periods.
+York time. An alert with no periods at all is active on every date. The
+[GTFS-realtime reference](https://gtfs.org/documentation/realtime/reference/#message-alert)
+says such an alert is shown "as long as it appears in the feed," and the feed
+only holds alerts that are live now. It hasn't come up yet: all 159 alerts in
+the 2026-09-22 pull had periods.
 
 `affected_stops` deliberately ignores MTA's `affected_stations` field, which
 lists the whole route. See [CONTEXT.md](../CONTEXT.md#the-traps-in-vocabulary-terms).
@@ -232,9 +237,20 @@ in [docs/accessibility.md](accessibility.md).
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `station` | string | no | Station name, matched loosely |
-| `stop_id` | string | no | GTFS parent-station id. Its name is looked up, then matched loosely |
+| `stop_id` | string | no | GTFS parent-station id. Its name is looked up, then matched loosely, including a shorter feed name on a shared route. Rows on routes the station doesn't serve move to `other_station_outages` |
+| `route_id` | string | no | Only rows whose `trainno` includes this route. `6X`, `7X`, and `FX` count as `6`, `7`, and `F`; `GS`, `FS`, and `H` count as `S` |
+| `date` | string | no | `YYYY-MM-DD`. Outages in effect now or scheduled whose window overlaps that day in New York time |
 | `upcoming` | boolean | no | `false` (default) for outages in effect now, `true` for scheduled ones |
 
-**Before relying on it:** a search can miss a station MTA spells differently,
-and there's no date or route filter. Read the
+`date` with `upcoming: true` is an error. `upcoming: false`, the default, is
+accepted with `date`. A date query reads the current feed alone, which relies on
+that feed containing every scheduled outage; MTA doesn't document that.
+
+Alongside MTA's rows, the answer has `date`, `route_id`,
+`route_tokens_matched`, `route_note`, `rows_without_station`, `no_match_note`,
+`date_caveats`, and `other_station_outages`. Each is described in
+[docs/accessibility.md](accessibility.md#the-answer).
+
+**Before relying on it:** a search can still miss a station MTA spells in a
+way we haven't seen, and the dates are MTA's estimates. Read the
 [gaps](accessibility.md#gaps) first.

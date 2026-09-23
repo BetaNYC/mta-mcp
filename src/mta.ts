@@ -379,15 +379,30 @@ function etOffsetMinutes(utcMs: number): number {
   return (asIfUtc - utcMs) / 60_000;
 }
 
+/**
+ * Epoch ms of a New York wall-clock time. Month is 1-based.
+ *
+ * Converting with the offset at the naive instant, then again with the offset
+ * at the first guess, is what makes this right on DST-transition days, where
+ * the first guess lands on the wrong side of the change.
+ */
+export function etWallClockMs(
+  year: number,
+  month: number,
+  day: number,
+  hour = 0,
+  minute = 0,
+  second = 0
+): number {
+  const naive = Date.UTC(year, month - 1, day, hour, minute, second);
+  const first = naive - etOffsetMinutes(naive) * 60_000;
+  return naive - etOffsetMinutes(first) * 60_000;
+}
+
 /** Epoch ms of 00:00:00 Eastern on an ISO date. */
 export function etMidnightMs(dateIso: string): number {
   const [y, m, d] = assertIsoDate(dateIso).split("-").map(Number);
-  const naive = Date.UTC(y, m - 1, d, 0, 0, 0);
-  const first = naive - etOffsetMinutes(naive) * 60_000;
-  // Re-check with the offset in force at the candidate instant; the two differ
-  // only on a DST-transition day, where the first guess lands on the wrong side.
-  const second = naive - etOffsetMinutes(first) * 60_000;
-  return second;
+  return etWallClockMs(y, m, d);
 }
 
 /** Half-open [start, end) epoch-second bounds of an Eastern calendar day. */
@@ -409,10 +424,19 @@ export function etDayBounds(dateIso: string): { start: number; end: number } {
  * following midnight does. Weekend work arrives as several periods (one per
  * weekend), so any single overlap is enough. A period with no `end` is
  * open-ended; none were observed, but the feed's schema permits it.
+ *
+ * An alert with no active_period at all is active on every date. The
+ * GTFS-realtime reference (https://gtfs.org/documentation/realtime/reference/#message-alert)
+ * says of active_period: "If missing, the alert will be shown as long as it
+ * appears in the feed." The feed is a snapshot of what is live now, so an alert
+ * with no periods is taken to apply to any date asked about. Answering "not
+ * active" instead would drop a real alert, which is the wrong way to fail.
+ * None of the 150 entities in the 2026-09-16 pull lacked periods.
  */
 export function overlapsEtDay(periods: ActivePeriod[] | undefined, dateIso: string): boolean {
   const { start: dayStart, end: dayEnd } = etDayBounds(dateIso);
-  return (periods ?? []).some((p) => {
+  if (!periods || periods.length === 0) return true;
+  return periods.some((p) => {
     const start = p.start ?? Number.NEGATIVE_INFINITY;
     const end = p.end ?? Number.POSITIVE_INFINITY;
     return start < dayEnd && end > dayStart;
@@ -480,6 +504,15 @@ function containsTokenRun(haystack: string[], needle: string[]): boolean {
   return false;
 }
 
+function scoreTokens(q: string[], n: string[]): number {
+  if (q.length === 0) return 0;
+  if (q.length === n.length && startsWithTokens(n, q)) return 100;
+  if (startsWithTokens(n, q)) return 80;
+  if (containsTokenRun(n, q)) return 60;
+  if (q.every((t) => n.includes(t))) return 40;
+  return 0;
+}
+
 /**
  * Score a station name against a query, on whole tokens.
  *
@@ -488,14 +521,7 @@ function containsTokenRun(haystack: string[], needle: string[]): boolean {
  * substring version silently offers a station 100 blocks away as a candidate.
  */
 export function scoreStation(query: string, stopName: string): number {
-  const q = tokens(query);
-  const n = tokens(stopName);
-  if (q.length === 0) return 0;
-  if (q.length === n.length && startsWithTokens(n, q)) return 100;
-  if (startsWithTokens(n, q)) return 80;
-  if (containsTokenRun(n, q)) return 60;
-  if (q.every((t) => n.includes(t))) return 40;
-  return 0;
+  return scoreTokens(tokens(query), tokens(stopName));
 }
 
 export type StationMatch = Station & { score: number };
@@ -572,7 +598,8 @@ export function resolveStationStrict(query: string, routeId?: string): StationRe
 // ismaintenanceoutage.
 //
 // `station` is FREE TEXT, not a stop_id, and does not always match a GTFS
-// stop_name exactly — matching is by name and every payload says so.
+// stop_name exactly — matching is by name, normalized (see eneTokens below),
+// and every payload says so.
 
 export type EneOutage = {
   station?: string;
@@ -599,6 +626,10 @@ export type EneOutage = {
  * current feed and filters the upcoming-flagged rows back out. Deriving
  * "upcoming" from the current feed would work today and rests on a superset
  * relationship MTA never documented, so we don't.
+ *
+ * A `date` query is the one exception. It reads only the current feed, so it
+ * covers in-effect and scheduled rows in one request, and it does rest on the
+ * superset. That tradeoff is stated in docs/accessibility.md.
  */
 export function eneFeedUrl(upcoming: boolean): string {
   return upcoming ? ENE_UPCOMING_URL : ENE_CURRENT_URL;
@@ -606,4 +637,211 @@ export function eneFeedUrl(upcoming: boolean): string {
 
 export function filterEneRows(rows: EneOutage[], upcoming: boolean): EneOutage[] {
   return upcoming ? rows : rows.filter((r) => r.isupcomingoutage !== "Y");
+}
+
+// ─── Matching elevator-feed station names ────────────────────────────────────
+//
+// The elevator feed spells some stations differently from GTFS. Counted in the
+// 2026-09-17 fixtures (58 distinct `station` values across both ene feeds), 55
+// are character-for-character GTFS stop_names and 56 are token-for-token. The
+// two that miss, and the rule that fixes each:
+//
+//   "42St/Port Authority-Bus Terminal"  vs GTFS "42 St-Port Authority Bus Terminal"
+//     a digit run glued to letters. Split it: 42st -> 42 st.
+//   "Bedford Pk Blvd"                   vs GTFS "Bedford Park Blvd"
+//     "Pk" for "Park". MTA's own GTFS uses both spellings: "42 St-Bryant Pk"
+//     (D16) against 13 stop_names with "Park". So pk -> park on both sides.
+//
+// No GTFS stop_name has a digit glued to a letter, and none uses "pk" for
+// anything but "Park", so both rules are no-ops on GTFS names except to make
+// "Bryant Pk" and "Bryant Park" equal. This normalization is used only for the
+// elevator feed. resolve_station keeps its own matching unchanged.
+
+const ENE_ABBREVIATIONS: Readonly<Record<string, string>> = { pk: "park" };
+
+// Ordinal suffixes a person may type ("34th St", "42nd St"). Neither GTFS nor
+// the feed fixtures write one after a number, so dropping them only helps
+// queries. "st" is left alone: after a number it is almost always "Street".
+const ORDINAL_SUFFIXES: ReadonlySet<string> = new Set(["th", "nd", "rd"]);
+
+export function eneTokens(value: string): string[] {
+  const raw = value
+    .toLowerCase()
+    .replace(/(\d)([a-z])/g, "$1 $2")
+    .replace(/[^a-z0-9]+/g, " ")
+    .trim()
+    .split(" ")
+    .filter((t) => t.length > 0);
+  return raw
+    .filter((t, i) => !(i > 0 && /^\d+$/.test(raw[i - 1]) && ORDINAL_SUFFIXES.has(t)))
+    .map((t) => ENE_ABBREVIATIONS[t] ?? t);
+}
+
+/** scoreStation's scale, over the elevator-feed normalization above. */
+export function scoreEneStation(query: string, feedStation: string): number {
+  return scoreTokens(eneTokens(query), eneTokens(feedStation));
+}
+
+// Street-type words. Dropped only in the reverse match below, where the feed's
+// name is shorter than the GTFS one: "Cortlandt St" for GTFS "WTC Cortlandt".
+const STREET_TYPES: ReadonlySet<string> = new Set(["st", "sts", "av", "avs", "sq", "rd", "blvd", "pkwy"]);
+
+/**
+ * Is the feed's name a shorter form of the GTFS name? Every feed word must
+ * appear in the GTFS name, ignoring street-type words, and at least one of the
+ * words that remain must not be a number. "Court Sq" is in "Court Sq-23 St";
+ * "Cortlandt St" is in "WTC Cortlandt". A bare "125 St" is never enough.
+ *
+ * This is looser than scoreEneStation, so callers must confirm the match
+ * another way. get_accessibility_outages uses it only with a stop_id, and only
+ * for rows whose trainno shares a route with that station.
+ */
+export function feedNameWithin(gtfsName: string, feedStation: string): boolean {
+  const gtfs = eneTokens(gtfsName);
+  const feed = eneTokens(feedStation).filter((t) => !STREET_TYPES.has(t));
+  if (!feed.some((t) => !/^\d+$/.test(t))) return false;
+  return feed.every((t) => gtfs.includes(t));
+}
+
+// ─── Matching elevator-feed routes ───────────────────────────────────────────
+//
+// `trainno` is slash-separated, e.g. "A/C/E/L". Counted across the 126 rows of
+// the current-feed fixture, it uses 1-7, A-G, J, L-N, Q, R, W, Z, "S" (6 rows)
+// and "LIRR" (9 rows). It never uses a GTFS express or shuttle id: no 6X, 7X,
+// FX, GS, FS, or H. So those route_ids are mapped to the token MTA does use:
+//
+//   6X -> 6, 7X -> 7, FX -> F   the express shares its local's name
+//   GS -> S                     observed: all 6 "S" rows are at Times Sq-42 St,
+//                               Grand Central-42 St, and 42St/Port Authority,
+//                               the stations of the 42 St Shuttle and its complex
+//   FS -> S, H -> S             NOT observed: no row sits on the Franklin Av or
+//                               Rockaway Park shuttle. Mapped to "S" anyway, so a
+//                               shuttle outage there is not missed. The cost is
+//                               that a bare "S" row elsewhere matches too.
+//
+// The route_id itself is always accepted as well, in case MTA starts using it.
+
+export const ENE_ROUTE_ALIASES: Readonly<Record<string, string>> = {
+  "6X": "6",
+  "7X": "7",
+  FX: "F",
+  GS: "S",
+  FS: "S",
+  H: "S",
+};
+
+/** The trainno tokens that count as this route. */
+export function eneRouteTokens(routeId: string): string[] {
+  const id = routeId.trim().toUpperCase();
+  const alias = ENE_ROUTE_ALIASES[id];
+  return alias ? [id, alias] : [id];
+}
+
+export function trainnoRoutes(trainno: string | undefined): string[] {
+  return (trainno ?? "")
+    .split(/[/,\s]+/)
+    .map((t) => t.trim().toUpperCase())
+    .filter((t) => t.length > 0);
+}
+
+/**
+ * Does the row's trainno include any of these tokens? `null` when trainno is
+ * empty, meaning we cannot tell. Every fixture row has a trainno.
+ */
+export function rowMatchesRouteTokens(row: EneOutage, wanted: string[]): boolean | null {
+  const routes = trainnoRoutes(row.trainno);
+  if (routes.length === 0) return null;
+  return routes.some((r) => wanted.includes(r));
+}
+
+// ─── Elevator-feed dates ─────────────────────────────────────────────────────
+//
+// `outagedate` and `estimatedreturntoservice` look like "09/16/2026 11:55:00 PM".
+// All 252 values in the current-feed fixture fit MM/DD/YYYY hh:mm:ss AM|PM.
+// MTA documents neither the format nor the time zone. We read them as New York
+// wall-clock time, which is how the rest of this server reads dates.
+
+const ENE_DATE = /^(\d{1,2})\/(\d{1,2})\/(\d{4}) (\d{1,2}):(\d{2}):(\d{2}) ?(AM|PM)$/i;
+
+/** Epoch ms, or null when the value is missing or not in the observed format. */
+export function parseEneDateMs(value: string | undefined): number | null {
+  const m = ENE_DATE.exec((value ?? "").trim());
+  if (!m) return null;
+  const [month, day, year, hour12, minute, second] = m.slice(1, 7).map(Number);
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  if (hour12 < 1 || hour12 > 12 || minute > 59 || second > 59) return null;
+  // Reject 02/31 and friends rather than let Date roll them into March.
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (check.getUTCMonth() !== month - 1 || check.getUTCDate() !== day) return null;
+  const pm = m[7].toUpperCase() === "PM";
+  const hour = (hour12 % 12) + (pm ? 12 : 0);
+  return etWallClockMs(year, month, day, hour, minute, second);
+}
+
+export type EneDateCaveat = "unparseable_date" | "inconsistent_dates" | "estimate_passed";
+
+/**
+ * Does an outage's window overlap the New York day? Fails toward caution:
+ *
+ * - A missing or unparseable date keeps the row (`unparseable_date`).
+ * - A return estimate before the start keeps the row (`inconsistent_dates`).
+ * - A return estimate already past when the feed was fetched means MTA still
+ *   lists the outage after it was due back, so the estimate is not trusted and
+ *   the outage is treated as open-ended (`estimate_passed`).
+ *
+ * The window is [outagedate, estimatedreturntoservice), half-open like the
+ * alert periods.
+ */
+export function eneOverlapsEtDay(
+  row: EneOutage,
+  dateIso: string,
+  nowMs: number
+): { overlaps: boolean; caveat: EneDateCaveat | null } {
+  const { start: dayStart, end: dayEnd } = etDayBounds(dateIso);
+  const start = parseEneDateMs(row.outagedate);
+  const end = parseEneDateMs(row.estimatedreturntoservice);
+  if (start === null || end === null) return { overlaps: true, caveat: "unparseable_date" };
+  if (end < start) return { overlaps: true, caveat: "inconsistent_dates" };
+  const passed = end <= nowMs;
+  const effectiveEnd = passed ? Number.POSITIVE_INFINITY : end;
+  const overlaps = start < dayEnd * 1000 && effectiveEnd > dayStart * 1000;
+  // Flag only when the passed estimate is what kept the row in.
+  const keptByPassed = passed && overlaps && !(end > dayStart * 1000);
+  return { overlaps, caveat: keptByPassed ? "estimate_passed" : null };
+}
+
+/**
+ * With a stop_id: is this row, whose name is shorter than the station's GTFS
+ * name, most likely at that station?
+ *
+ * Candidates are the stations on a route that both the row's trainno and the
+ * target serve, whose GTFS name contains the feed name (feedNameWithin). If
+ * several do, the closest name wins, meaning the fewest GTFS words left over. "Cortlandt St" on
+ * the 1 is within both "WTC Cortlandt" (138, one word over) and "Van Cortlandt
+ * Park-242 St" (101, four over), so it goes to 138 only. A tie keeps every
+ * tied station, which errs toward showing a row rather than hiding it.
+ *
+ * Counted on the 126 current-feed fixture rows, this finds 4 rows the forward
+ * match missed: Cortlandt St (138), Court Sq (F09), and South Ferry (R27,
+ * Whitehall St-South Ferry, which shares the R and W).
+ */
+export function eneRowWithinStation(stopId: string, row: EneOutage): boolean {
+  const target = stationById(stopId);
+  if (!target || !row.station) return false;
+  const rowRoutes = trainnoRoutes(row.trainno);
+  if (rowRoutes.length === 0) return false;
+  const leftover = (s: Station) =>
+    eneTokens(s.stop_name).length - eneTokens(row.station as string).filter((t) => !STREET_TYPES.has(t)).length;
+  // The routes this row and the target have in common. Only stations on one of
+  // those compete, since only they could be confused with the target.
+  const shared = target.routes.flatMap((r) => eneRouteTokens(r)).filter((r) => rowRoutes.includes(r));
+  if (shared.length === 0) return false;
+  const candidates = STATIONS.stations.filter(
+    (s) =>
+      s.routes.flatMap((r) => eneRouteTokens(r)).some((r) => shared.includes(r)) &&
+      feedNameWithin(s.stop_name, row.station as string)
+  );
+  if (!candidates.some((c) => c.stop_id === stopId)) return false;
+  const best = Math.min(...candidates.map(leftover));
+  return leftover(target) === best;
 }

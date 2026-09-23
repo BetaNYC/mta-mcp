@@ -10,7 +10,7 @@ Thanks for considering a contribution. Before you start, please:
 
 ## Where to ask what
 
-This repository covers the MCP server only. Questions about the MTA feeds themselves go to the MTA. It has no developer support team, but it does watch a public group.
+This repository covers the MCP server only. Questions about the MTA feeds themselves go to the MTA. MTA points developers to a public Google Group.
 
 | Topic | Where |
 |---|---|
@@ -43,7 +43,7 @@ MTA publishes no rate limit and no refresh cadence, and its responses carry no `
 
 Please don't add a code path that skips any of them. In particular:
 
-- **No background polling, prefetch, warm-up fetch, or cron.** The server fetches only when a tool is called. Unrequested traffic to a public agency's server is how an outage starts.
+- **No background polling, prefetch, warm-up fetch, or cron.** The server fetches only when a tool is called.
 - **No fetching static GTFS at runtime.** `scripts/update-stations.mjs` generates `data/stations.json` offline, and station lookup makes no network calls.
 - **No network access in tests.** The suite runs against fixtures in `test/fixtures/`. That keeps the tests correct and lets CI run on every push without touching MTA.
 
@@ -57,11 +57,11 @@ When the documentation and the live feed disagree, go with the live feed and wri
 
 If you change how alerts are matched to stations, you'll run into these. Each has a test that fails if it comes back, and each was a real bug in BetaNYC work, shipped or caught just before.
 
-**1. `mercury_alert.affected_stations` lists the whole route.** On alert `lmm:planned_work:33826` ("No 6 between Hunts Point Av and 125 St") it lists 32 stations, including 68 St–Hunter College, which is nowhere near the suspension. Build `affected_stops` from `informed_entity` instead. Swapping that one field breaks every answer the server gives.
+**1. `mercury_alert.affected_stations` lists the whole route.** On alert `lmm:planned_work:33826` ("No 6 between Hunts Point Av and 125 St") it lists 32 stations, including 68 St–Hunter College, which is nowhere near the suspension. Build `affected_stops` from `informed_entity` instead.
 
 **2. A station named in an alert may be gaining service.** `Planned - Express to Local` alerts tag the stations that get more trains. On 2026-09-19, stop 628 is tagged in two alerts, and both are the 4 and 5 running local through it. Classify on `mercury_alert.alert_type` using the effect map in `src/mta.ts`, never on whether a station is mentioned.
 
-**3. Station names are not unique.** 193 of 496 parent stations share a name with another, across 76 names. `125 St` is four stations on four lines. `resolve_station` returns every candidate and never picks one, and `route_id` narrows the list. A code path that collapses candidates to one station would be wrong about a quarter of the time on the most common names.
+**3. Station names are not unique.** 193 of 496 parent stations share a name with another, across 76 names. `125 St` is four stations on four lines. `resolve_station` returns every candidate and never picks one, and `route_id` narrows the list.
 
 One more design choice, which has no test because it isn't a bug: an alert type we don't recognize counts as a disruption and applies to every station on the route. If we don't know what a status means, we can't trust its station tagging either.
 

@@ -44,7 +44,7 @@ Exposes 4 tools over MCP:
 | `check_route_on_date` | Is a route disrupted on a date, optionally at one station? The one to use for event planning |
 | `get_service_alerts` | All alerts active on a date, filterable by route, type, and effect |
 | `resolve_station` | Free-text station name to GTFS parent-station id, with the routes serving it |
-| `get_accessibility_outages` | Elevator and escalator outages, current or upcoming |
+| `get_accessibility_outages` | Elevator and escalator outages, current, upcoming, or on a date |
 
 Every field in every answer is documented in [docs/tools.md](docs/tools.md).
 Elevators and escalators have their own guide, including known gaps:
@@ -124,7 +124,7 @@ rider-facing date string.
 }
 ```
 
-That weekend the 6 is suspended in the Bronx and still runs normally at
+That weekend the 6 is suspended in the Bronx, and the alert doesn't name
 68 St–Hunter College. One call returns both facts.
 
 If `station` matches more than one station, the tool doesn't pick one. It
@@ -183,11 +183,13 @@ Elevator and escalator outages.
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `station` | string | no | Station name as free text, matched loosely |
-| `stop_id` | string | no | GTFS parent-station id. The tool looks up its name, then matches loosely |
+| `stop_id` | string | no | GTFS parent-station id. The tool looks up its name, matches loosely, and sets aside rows on other routes |
+| `route_id` | string | no | Only outages whose `trainno` includes this route. `6X`, `7X`, and `FX` count as `6`, `7`, and `F`; the shuttles `GS`, `FS`, and `H` count as `S` |
+| `date` | string | no | `YYYY-MM-DD`. Outages in effect now or scheduled that overlap that day in New York time. Can't be combined with `upcoming: true` |
 | `upcoming` | boolean | no | `false` (default) for outages in effect now, `true` for scheduled ones |
 
 ```json
-{ "station": "Port Authority" }
+{ "stop_id": "A27", "date": "2026-09-26" }
 ```
 
 Returns MTA's outage rows as they are. The fields that matter most:
@@ -206,13 +208,14 @@ Returns MTA's outage rows as they are. The fields that matter most:
 Please read [docs/accessibility.md](docs/accessibility.md) before relying on
 this tool. In short:
 
-- **A search can miss outages.** MTA names stations its own way in this feed.
-  `"Bedford Park Blvd"` and `"42 St-Port Authority Bus Terminal"` both return
-  nothing, even by `stop_id`, because MTA's rows say `"Bedford Pk Blvd"` and
-  `"42St/Port Authority-Bus Terminal"`. If a search finds nothing, try a short
-  part of the name before saying there are no outages.
-- **There's no date filter.** For an event, run it with `upcoming: false` and
-  `upcoming: true`, and compare the dates yourself.
+- **A search can still miss outages.** MTA names stations its own way in this
+  feed. We handle the spellings we've seen, like `"Bedford Pk Blvd"` and
+  `"42St/Port Authority-Bus Terminal"`, but new ones can appear. An empty
+  station or route search comes with a `no_match_note`. Read it, and try a
+  short part of the name before saying there are no outages.
+- **Dates are MTA's estimates.** With `date`, an outage still listed after its
+  estimated return counts as ongoing, and `date_caveats` says which rows that
+  applies to.
 - **It doesn't say whether a station is accessible at all,** or what the
   alternate route is. [MTA's status page](https://www.mta.info/elevator-escalator-status)
   does.
@@ -312,8 +315,8 @@ node skills/mta-subway/scripts/mta.mjs check_route_on_date '{"route_id":"6","dat
 The answers are the same. The difference is where it works and what it costs:
 
 - **The skill** loads its full instructions only when a subway question comes
-  up, and its answers are about 25–30% smaller. It needs an agent that can run
-  commands, so it doesn't work in Claude Desktop or other chat apps.
+  up. It needs an agent that can run commands, so it doesn't work in Claude
+  Desktop or other chat apps.
 - **The MCP server** works in any app that supports MCP, and spaces out every
   request to MTA in one place. It adds about 1,000 tokens of tool descriptions
   to every conversation.
@@ -330,7 +333,7 @@ Setup and a fuller comparison: [skills/README.md](skills/README.md).
 
 > Which station is "125 St" on the 6, and is it affected?
 
-> Are the elevators working at Jamaica–179 St?
+> Are any elevators out at Jamaica–179 St?
 
 > The event flyer says "6 train to 68 St." Should we add a travel warning?
 

@@ -14,7 +14,7 @@ Term 1 of MTA's [data feed terms and conditions](https://www.mta.info/developers
 > to others only from a non-MTA server. Accordingly, you will download and store
 > the MTA data feed on a non-MTA server **which users of your app will access in
 > order to obtain data**. MTA prohibits the development of an app that would make
-> the data available to others directly from MTA's server(s)."
+> the data available to others directly from MTA's server(s)." (Emphasis ours.)
 
 The same page repeats the prohibition as the framing for the whole agreement:
 
