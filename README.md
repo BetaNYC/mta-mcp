@@ -8,10 +8,13 @@
 >
 > - We have only inspected the subway alerts feed. Bus, Long Island Rail Road,
 >   and Metro-North alerts are untested. MTA says all four feeds follow the same
->   conventions, and we have already found one place where they don't.
-> - The effect classification covers 11 `alert_type` values, the ones we saw
->   across two live pulls. MTA can send others. An unrecognized value counts as
->   a disruption, which keeps answers cautious but isn't the same as coverage.
+>   conventions, but the status rank it documents in every entity ID showed up
+>   on 1 of 150 subway entities (see
+>   [below](#dont-rely-on-the-status-rank-in-entity-ids)).
+> - The effect classification covers 11 `alert_type` values, the ones we saw in
+>   a live pull on 2026-09-16. MTA can send others. An unrecognized value counts
+>   as a disruption, so answers err on the side of caution until someone adds
+>   that value to the map.
 > - We have tested it against a handful of real dates and stations.
 >
 > Found something wrong? [Open an issue](https://github.com/BetaNYC/mta-mcp/issues).
@@ -53,7 +56,7 @@ Elevators and escalators have their own guide, including known gaps:
 Don't use MCP? The same tools also come as a [skill](#use-it-without-mcp-the-skill)
 for Claude Code.
 
-It reads two MTA feeds. Neither needs a key.
+It reads two MTA feeds, from three URLs. Neither needs a key.
 
 - `camsys%2Fsubway-alerts.json`: GTFS-realtime service alerts with MTA's
   Mercury extensions, published at [api.mta.info](https://api.mta.info/#/serviceAlerts)
@@ -70,9 +73,9 @@ they join, and their terms: [docs/data-sources.md](docs/data-sources.md).
 
 **Out of scope:** trip updates, vehicle positions, and anything in the
 `nyct%2Fgtfs-*` family. Those feeds are protobuf-only and would need three
-custom `.proto` files, and nobody has asked for them. Bus, LIRR, and
-Metro-North alerts use the same format and would be a small addition, but
-they aren't wired up yet.
+custom `.proto` files, and nobody has asked for them. MTA says bus, LIRR, and
+Metro-North alerts use the same format. We haven't tested that, and they
+aren't wired up yet.
 
 ---
 
@@ -136,8 +139,9 @@ outages are included only when you ask, to keep the default answer small.
 }
 ```
 
-That weekend the 6 is suspended in the Bronx, and the alert doesn't name
-68 St–Hunter College. One call returns both facts.
+That weekend the 6 is suspended in the Bronx, but the alert doesn't name
+68 St–Hunter College, so the station check comes back `disrupted: false` while
+the alert is still listed.
 
 If `station` matches more than one station, the tool doesn't pick one. It
 returns `resolved: false` with the candidates and a reason. See
@@ -194,9 +198,10 @@ Without `route_id`, the same query returns four stations.
 
 `accessibility` is MTA's ADA status for that station: `fully_accessible`,
 `partially_accessible` (with the one direction that is, and MTA's note), or
-`not_accessible`. It's per station, not per complex, and it's a dated
-snapshot. It says a station has an accessible path, not that the path is
-working today.
+`not_accessible`. It's per station, so stations in one complex can differ, and
+it's a dated snapshot. It records that a station has an accessible path, not
+that the path works today. For elevator and escalator outages MTA has
+reported, use `get_accessibility_outages`.
 
 ### `get_accessibility_outages`
 
@@ -234,10 +239,10 @@ same complex. MTA's fields that matter most:
 Please read [docs/accessibility.md](docs/accessibility.md) before relying on
 this tool. In short:
 
-- **No outage isn't the same as usable.** The feed can lag. A station MTA
-  lists as not accessible may have no elevator to report, though some such
-  stations do have ADA-compliant elevators, and the answer names them. An
-  empty answer comes with a `no_match_note` that says so.
+- **An empty answer doesn't mean the station is usable.** The feed can lag. A
+  station MTA lists as not accessible may have no elevator to report, though
+  some such stations do have ADA-compliant elevators, and the answer names
+  them. An empty answer comes with a `no_match_note` that says so.
 - **Use `stop_id`.** It places rows by equipment ID. A `station` search is by
   name only, and MTA names stations its own way in this feed. We handle the
   spellings we've seen, like `"Bedford Pk Blvd"`, but new ones can appear.
@@ -398,7 +403,7 @@ the repo. The test suite makes none either: it runs against saved fixtures with
 
 ## Notes & limitations
 
-Please read this section before you pass an answer along to anyone.
+These limits affect whether an answer is safe to pass along.
 
 ### A station with no alert may still be affected
 
@@ -417,7 +422,7 @@ Every `check_route_on_date` response includes `station_level_detail` and a
 plain-language `station_level_detail_note` saying which case you're in. When no
 alert tags stations, a route-level alert counts against the station.
 
-The feed never sends an all-clear. No alert doesn't mean service is normal.
+The feed never sends an all-clear.
 
 ### Added service is not a disruption
 
@@ -430,12 +435,11 @@ still sets `affects_this_station: true` so you can see the change.
 
 ### Unknown alert types count as disruptions
 
-The `alert_type` to effect map covers the 11 values we saw in a full feed
-snapshot. MTA's status table lists 35, and the list isn't a documented, fixed
+The `alert_type` to effect map covers the 11 values we saw in a live pull on
+2026-09-16. MTA's status table lists 35, and the list isn't a documented, fixed
 set. Any value the map doesn't recognize gets `effect: "unknown"`, counts as a
 disruption, appears in the response's `unknown_alert_types`, and applies to
-every station on the route. If we don't know what a status means, we can't
-trust its station tagging either.
+every station on the route, since its station tagging can't be trusted either.
 
 A non-empty `unknown_alert_types` means it's time to extend
 `EFFECT_BY_ALERT_TYPE` in `src/mta.ts`.
@@ -459,15 +463,15 @@ comes from MTA's static GTFS.
 different names, such as `Times Sq-42 St (127)` ↔ `42 St-Port Authority Bus Terminal (A27)`
 and `Park Place (228)` ↔ `World Trade Center (E01)`. This server only groups
 stations with the same name. Asking about one name won't surface an alert filed
-against a connected station with a different name. For event travel this
-hasn't mattered yet, and we can add it if it does.
+against a connected station with a different name. Check each name
+separately.
 
 ### The station list is a dated snapshot
 
 `data/stations.json` is generated from MTA's `gtfs_subway.zip`, which MTA
 updates a few times a year. A new or renamed station won't resolve
-until the file is regenerated. An unrecognized `stop_id` returns a clear error
-instead of quietly answering for the whole route.
+until the file is regenerated. An unrecognized `stop_id` returns a clear
+error. It does not answer for the whole route.
 
 ```bash
 npm run stations            # re-download and rebuild data/stations.json
@@ -482,7 +486,7 @@ an answer for an event, run `npm run accessibility-data`. See
 
 Some stations serve more routes than the subway map shows. `628`
 (68 St–Hunter College) returns `4`, `6`, and `6X`, because the 4 runs local
-overnight. That's the regular schedule.
+overnight on its regular schedule.
 
 ### Refresh cadence is undocumented
 
@@ -498,9 +502,10 @@ all four agency feeds; no agency-specific exceptions apply." In a live
 snapshot, 1 of 150 entities had it. None of the 149 `lmm:planned_work:*`
 entries did, and planned work is what event planning depends on.
 
-Parsing for it fails quietly. `"lmm:planned_work:34707".split(":").pop()`
-returns `"34707"`, a plausible number that matches nothing in the 35-row table
-and falls through to a default. We classify on `alert_type` instead. If a rank
+Parsing for it fails without an error.
+`"lmm:planned_work:34707".split(":").pop()` returns `"34707"`, a plausible
+number that matches nothing in the 35-row table and falls through to a
+default. We classify on `alert_type` instead. If a rank
 is ever needed, the last segment of `mercury_entity_selector.sort_order`
 (`"MTASBWY:7:14"` → 14) is where we've seen it.
 
@@ -519,7 +524,7 @@ email or graphic. MTA's own `header_text`, which writes the route as ASCII
 npm install          # install + build
 npm run build        # tsc
 npm test             # build, then the full suite, with no network access
-npm run smoke        # ONE live request to MTA. Not in npm test, not in CI.
+npm run smoke        # one live request to MTA; not part of npm test or CI
 npm run stations     # regenerate data/stations.json from MTA's static GTFS
 npm run accessibility-data  # regenerate data/station_ada.json and data/equipment.json from data.ny.gov
 ```
@@ -553,7 +558,7 @@ Layout:
 | `scripts/smoke.mjs` | the single live request |
 
 Tool schemas reject unknown parameters, with an error that names the bad key
-and lists the accepted ones. Quietly dropping a mistyped filter would return
+and lists the accepted ones. Dropping a mistyped filter would return
 results that look right but answer a different question.
 
 ---
@@ -630,12 +635,12 @@ Issues and pull requests are welcome at
 [github.com/BetaNYC/mta-mcp](https://github.com/BetaNYC/mta-mcp).
 
 Please start with [CONTRIBUTING.md](CONTRIBUTING.md). It covers where to ask
-what, the project's firm rules, and three traps in MTA's data that have each
-produced a wrong answer in real BetaNYC work.
+what, the project's firm rules, and three traps in MTA's data, each of which
+caused a real bug in BetaNYC work.
 
 [CONTEXT.md](CONTEXT.md) defines the vocabulary: route vs. line, parent station
 vs. platform, and what "affected" does and doesn't mean. Read it before changing
-`src/mta.ts`. Most bugs here come from mixing those terms up.
+`src/mta.ts`. Several past bugs came from mixing those terms up.
 
 Two things a pull request must not do:
 

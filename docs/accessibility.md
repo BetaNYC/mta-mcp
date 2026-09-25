@@ -1,7 +1,7 @@
 # Elevators, escalators, and accessibility
 
 This page covers `get_accessibility_outages`, the ADA status every station
-now carries, and the elevator check `check_route_on_date` can add. It says
+carries, and the elevator check `check_route_on_date` can add. It says
 what they can tell you, how to read them, and where they fall short. Please
 read the gaps section before telling anyone a station is accessible. A wrong
 "no outages" can leave a wheelchair user at a station with no way to reach
@@ -429,10 +429,10 @@ several of these.
 
 ## Gaps
 
-These are real problems in the current tool. Each one can produce a confident
-wrong answer.
+These are real problems in the current tool. Each one can produce a wrong
+answer that looks right.
 
-### 1. No outage is not the same as usable
+### 1. An empty answer doesn't mean the station is usable
 
 A station with no listed outage may still be unusable. The feed can lag, an
 outage MTA hasn't entered won't show, and a station MTA lists as

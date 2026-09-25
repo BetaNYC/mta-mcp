@@ -1,6 +1,6 @@
 # MTA MCP build vocabulary
 
-The words this codebase uses, and what they mean in MTA's data. Most of the bugs this server is built to avoid come from mixing up two terms that sound alike but aren't, which produces a confident wrong answer.
+The words this codebase uses, and what they mean in MTA's data. Most of the bugs this server is built to avoid come from mixing up two terms that sound alike but aren't, which produces a wrong answer that looks right.
 
 Read this before changing anything in `src/mta.ts`.
 
@@ -18,7 +18,7 @@ A single service, identified by `route_id`: `"6"`, `"A"`, `"7X"`. The subway fee
 
 A physical stretch of track, named for the street it runs under, like the Lexington Avenue Line or the 8th Avenue Line. Several routes share one line.
 
-**This codebase doesn't model lines.** `route_long_name` hints at them ("Lexington Avenue Local", "8 Avenue Express") but there is no line identifier in the feed and no tool takes one. When someone asks "what's happening on the Lexington line this weekend," that becomes `get_service_alerts` calls for the 4, 5, 6, and 6X. Please don't add a line abstraction just to handle that phrasing.
+**This codebase doesn't model lines.** `route_long_name` hints at them ("Lexington Avenue Local", "8 Avenue Express") but there is no line identifier in the feed and no tool takes one. When someone asks "what's happening on the Lexington line this weekend," that becomes `get_service_alerts` calls for the 4, 5, 6, and 6X. A line abstraction isn't needed for that phrasing.
 
 ### Parent station vs. platform
 

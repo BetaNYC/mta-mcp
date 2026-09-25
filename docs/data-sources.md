@@ -3,10 +3,9 @@
 Every piece of data this server uses, where it comes from, what it gives us,
 how the pieces join, the terms each comes under, and how to refresh it.
 
-There are two kinds. Three MTA feeds are read live, when a tool is called.
-Three snapshots are bundled in `data/` and read from disk, so they never cost a
-network request at runtime. Nothing in `data/` is fetched while the server
-runs.
+There are two kinds. Two MTA feeds, served from three URLs, are read live when
+a tool is called. Three snapshots are bundled in `data/` and read from disk, so
+they never cost a network request at runtime.
 
 | Source | Publisher | Read | Terms |
 |---|---|---|---|

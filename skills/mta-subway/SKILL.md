@@ -6,9 +6,9 @@ description: Check NYC subway service alerts for a date and station, look up sta
 # MTA subway alerts
 
 This skill answers subway questions by running a script. The script does the
-fetching and the tricky parts, and prints a small JSON answer. Don't fetch
-MTA's feeds yourself: the raw alerts feed is about 200,000 tokens, and reading
-it by hand runs into the traps below.
+fetching, station matching, and alert classification, and prints a small JSON
+answer. Don't fetch MTA's feeds yourself: the raw alerts feed is about 200,000
+tokens, and reading it by hand runs into the traps below.
 
 ## Setup
 
@@ -98,7 +98,6 @@ can strand someone who uses a wheelchair.
 - **In a route check,** pass `include_accessibility: true` with the station to
   get that day's outages in `accessibility_outages`. It costs one more request,
   so only ask when accessibility matters to the question.
-
 - **For an event, pass the date.** `date` returns every outage, in effect now
   or scheduled, whose window overlaps that day. Don't combine it with
   `upcoming: true`; that's an error. Rows whose dates can't be trusted are
@@ -128,8 +127,7 @@ can strand someone who uses a wheelchair.
 ## What to tell people
 
 - Every answer is unofficial and may be out of date. Say that riders should
-  confirm at [mta.info](https://www.mta.info). This is required by MTA's data
-  terms, not just good manners.
+  confirm at [mta.info](https://www.mta.info). MTA's data terms require it.
 - Write "the 6 train," not a route bullet or emoji. MTA's route symbols are
   licensed separately.
 - For event copy, give the travel note and the check date, e.g. "As of

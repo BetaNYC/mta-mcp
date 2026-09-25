@@ -18,7 +18,8 @@ node skills/mta-subway/scripts/mta.mjs --help
 The script runs the server's own code from `dist/`, so both give the same
 answers, including the station matching, the alert classification, the
 station ADA status and alternate routes, and the disclaimers. The ADA status
-and alternate routes come from snapshots in `data/`, so they add no request. It adds a 60-second cache on disk so repeat questions reuse one
+and alternate routes come from snapshots in `data/`, so they add no request.
+The script adds a 60-second cache on disk so repeat questions reuse one
 download. The server's cache lives in memory, and each script run is a new
 process.
 
@@ -33,7 +34,8 @@ process.
 | Spacing out requests to MTA | Enforced across every call | Enforced within a run. The disk cache covers repeat questions, but two runs at the same moment could both fetch |
 
 Use the MCP if you work in a chat app or want the strongest rate limiting. Use
-the skill if you work in Claude Code and want to keep conversations light.
+the skill if you work in Claude Code and want to skip the roughly 1,000 tokens
+the MCP's tool descriptions add to every conversation.
 
 For scale: on 2026-09-22 the raw alerts feed was about 740,000 characters,
 roughly 200,000 tokens. Both the MCP and the skill filter it down before the
