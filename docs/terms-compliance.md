@@ -1,10 +1,8 @@
 # Why this is not on npm
 
 BetaNYC publishes seven MCP servers to npm under `@betanyc`. This one is
-intentionally not one of them. `package.json` sets `"private": true`, so an
-accidental `npm publish` fails.
-
-We wrote this down so the reasoning outlasts the conversation where we decided it.
+not. `package.json` sets `"private": true`, so an accidental `npm publish`
+fails.
 
 ## The clause
 
@@ -45,7 +43,7 @@ let MTA act at its sole discretion:
 > "Permanently or temporarily terminate your access to the data feed because MTA
 > has determined in its sole discretion that you have violated this agreement."
 
-An `npx` one-liner isn't worth that risk.
+We chose not to take that risk for an `npx` one-liner.
 
 If publishing is ever worth doing, there are two ways to get there. The first is
 the setup the terms describe: cache the feed on a BetaNYC-hosted endpoint and

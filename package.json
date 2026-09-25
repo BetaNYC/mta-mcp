@@ -2,7 +2,7 @@
   "name": "mta-mcp",
   "version": "0.1.0",
   "private": true,
-  "description": "Local MCP server for MTA subway service alerts, accessibility outages, and station lookup. Unpublished by design — see docs/terms-compliance.md.",
+  "description": "MCP server for NYC subway service alerts, elevator and escalator outages, and station lookup, from MTA's public feeds. Build from source; not on npm; status alpha.",
   "license": "MIT",
   "author": "BetaNYC",
   "homepage": "https://github.com/BetaNYC/mta-mcp",

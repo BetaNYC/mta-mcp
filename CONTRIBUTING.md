@@ -23,11 +23,11 @@ Feed questions get better answers in MTA's group than in our tracker, and the an
 
 ## Ground rules
 
-This server reads a live public feed run by a public agency, and people use its answers to decide how to travel. That leads to a few rules we hold firm on in review.
+This server reads a live public feed run by a public agency, and people use its answers to decide how to travel. So review holds pull requests to these rules.
 
 ### Don't publish this to npm
 
-`package.json` sets `"private": true` on purpose, so an accidental publish fails. We'll close a pull request that removes it.
+`package.json` sets `"private": true`, so an accidental publish fails. We'll close a pull request that removes it.
 
 Term 1 of MTA's [data feed terms](https://www.mta.info/developers/terms-and-conditions) requires that users of a distributed app get the data from *your* server, not MTA's:
 
@@ -63,7 +63,7 @@ If you change how alerts are matched to stations, you'll run into these. Each ha
 
 **3. Station names are not unique.** 193 of 496 parent stations share a name with another, across 76 names. `125 St` is four stations on four lines. `resolve_station` returns every candidate and never picks one, and `route_id` narrows the list.
 
-One more design choice, which has no test because it isn't a bug: an alert type we don't recognize counts as a disruption and applies to every station on the route. If we don't know what a status means, we can't trust its station tagging either.
+One more design choice, which has no test because it isn't a bug: an alert type we don't recognize counts as a disruption and applies to every station on the route. See [CONTEXT.md](CONTEXT.md) for why.
 
 ## How to contribute
 
@@ -93,7 +93,7 @@ Expect questions on anything in `src/mta.ts`. The request path and the alert-mat
 
 We don't encourage or prohibit AI coding tools. This project was largely written with [Claude](https://claude.ai), and the README says so.
 
-If you used a generative tool for any part of a contribution, say so in the pull request. Generated code needs more review, not less. The most common mistake we've seen in this codebase is picking the field with the obvious name: `affected_stations` is well-named, parses cleanly, and gives the wrong answer. Check your change against the live feed before you submit.
+If you used a generative tool for any part of a contribution, say so in the pull request. Generated code gets extra review. The most common mistake we've seen in this codebase is picking the field with the obvious name: `affected_stations` is well-named, parses cleanly, and gives the wrong answer. Check your change against the live feed before you submit.
 
 ## License
 
