@@ -43,6 +43,21 @@ ADA status) or `inventory_data` (the elevator and escalator inventory):
 say. Those snapshots are never fetched at runtime. See
 [data-sources.md](data-sources.md).
 
+Every answer that uses a bundled snapshot also carries:
+
+| Field | Meaning |
+|---|---|
+| `snapshot_as_of` | The New York date each snapshot it used was pulled, keyed `stations`, `station_ada`, `equipment`. `null` if the file has no readable date |
+| `snapshot_warning` | `null` while every snapshot it used is within its threshold. Otherwise one or two sentences giving each old snapshot's date and age and the command to refresh it, e.g. *"Station accessibility data is from 2026-09-22 (47 days old). Run `npm run accessibility-data` in your mta-mcp folder to refresh."* |
+
+The thresholds are 30 days for `station_ada` and `equipment` and 90 for
+`stations`. A file with no readable date always gets a warning. Which
+snapshots an answer used: `stations` for every tool except an unfiltered or
+name-only `get_accessibility_outages`; `station_ada` whenever a station is
+resolved; `equipment` for `get_accessibility_outages` and for
+`check_route_on_date` with `include_accessibility`. See
+[Keep your data current](../README.md#keep-your-data-current).
+
 ## The alert fields
 
 `check_route_on_date` and `get_service_alerts` describe each alert with these

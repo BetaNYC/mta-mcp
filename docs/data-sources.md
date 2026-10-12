@@ -260,7 +260,17 @@ ADA row, that every equipment code in the saved outage feeds is placed at a
 station, and that the field names haven't changed. Review the diff: each
 record is on its own line, so a refresh shows only what changed.
 
-There's no schedule. Refresh when you need current data: before relying on an
-answer for an event or a publication, or when MTA announces a newly accessible
-station. Every answer that uses a snapshot says when it was pulled, so check
-that date first.
+`npm run refresh-data` runs both commands.
+
+Nothing refreshes the snapshots for you: the server never fetches them, and
+there is no scheduled job. Refresh after every `git pull` or monthly, before
+relying on an answer for an event or a publication, and when MTA announces a
+newly accessible station.
+
+Each file records when it was pulled: `source.data_pulled_at` in
+`station_ada.json` and `equipment.json`, and `generated_at` in
+`stations.json`. The server reads those dates. Every answer that uses a
+snapshot reports them in `snapshot_as_of`, and adds `snapshot_warning` once a
+snapshot is more than 30 days old (the two data.ny.gov files) or 90 days old
+(the station list). The server also logs each date and age to stderr at
+startup. See [Keep your data current](../README.md#keep-your-data-current).

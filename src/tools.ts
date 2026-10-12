@@ -43,6 +43,7 @@ import {
   stationName,
   todayIso,
 } from "./mta.js";
+import { type SnapshotName, snapshotFooter } from "./freshness.js";
 
 const EFFECTS = [
   "reduced",
@@ -58,7 +59,7 @@ export const TOOLS = [
   {
     name: "check_route_on_date",
     description:
-      "Is a subway route disrupted on a given date, optionally at one station? Dates are interpreted in America/New_York. Answers from MTA's service-alert feed. A station that only GAINS service (an express train running local) is reported as affected but NOT disrupted. Station-level absence is not absence of impact — read station_level_detail before treating disrupted:false as a guarantee. The station carries MTA's ADA status; elevator outages are included only with include_accessibility:true.",
+      "Is a subway route disrupted on a given date, optionally at one station? Dates are interpreted in America/New_York. Answers from MTA's service-alert feed. A station that only GAINS service (an express train running local) is reported as affected but NOT disrupted. Station-level absence is not absence of impact — read station_level_detail before treating disrupted:false as a guarantee. The station carries MTA's ADA status; elevator outages are included only with include_accessibility:true. Station names and ADA status come from local snapshots the user must refresh; snapshot_as_of gives their dates and snapshot_warning flags old ones.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -89,7 +90,7 @@ export const TOOLS = [
   {
     name: "get_service_alerts",
     description:
-      "List MTA subway service alerts active on a date, with optional filters. Defaults to today in America/New_York. Use this for open-ended questions like what is happening on a line this weekend.",
+      "List MTA subway service alerts active on a date, with optional filters. Defaults to today in America/New_York. Use this for open-ended questions like what is happening on a line this weekend. Stop names come from a local station snapshot the user must refresh; see snapshot_as_of and snapshot_warning.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -120,7 +121,7 @@ export const TOOLS = [
   {
     name: "resolve_station",
     description:
-      "Resolve free-text station names to GTFS parent-station ids, ranked best first, with the routes serving each and MTA's ADA status. Reads a bundled snapshot of MTA's static GTFS — no network call. Station names are not unique: '125 St' is four different stations on four different lines, so every candidate is returned rather than one guessed. route_id is the disambiguator.",
+      "Resolve free-text station names to GTFS parent-station ids, ranked best first, with the routes serving each and MTA's ADA status. Reads a bundled snapshot of MTA's static GTFS — no network call. The station list and ADA status are local snapshots the user must refresh; snapshot_as_of gives their dates and snapshot_warning flags old ones. Station names are not unique: '125 St' is four different stations on four different lines, so every candidate is returned rather than one guessed. route_id is the disambiguator.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -138,7 +139,7 @@ export const TOOLS = [
   {
     name: "get_accessibility_outages",
     description:
-      "Elevator and escalator outages in the subway: in effect now, scheduled, or overlapping one date, with MTA's alternate route for each elevator. With stop_id, rows are placed by equipment ID using MTA's equipment inventory, with name matching as a fallback; each row's matched_by says which. Zero matches is not proof of no outage, and no outage is not proof a station is usable; read no_match_note and station_accessibility.",
+      "Elevator and escalator outages in the subway: in effect now, scheduled, or overlapping one date, with MTA's alternate route for each elevator. With stop_id, rows are placed by equipment ID using MTA's equipment inventory, with name matching as a fallback; each row's matched_by says which. Zero matches is not proof of no outage, and no outage is not proof a station is usable; read no_match_note and station_accessibility. Equipment locations, alternate routes, and ADA status come from local snapshots the user must refresh; snapshot_as_of gives their dates and snapshot_warning flags old ones.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -333,6 +334,7 @@ async function checkRouteOnDate(args: {
         resolved: false,
         reason: ambiguityReason(args.station, args.route_id, resolved.reason),
         candidates: withAccessibility(resolved.candidates),
+        ...snapshotFooter(["stations", "station_ada"]),
         ...provenance(Date.now()),
       };
     }
@@ -410,6 +412,13 @@ async function checkRouteOnDate(args: {
         }`
       : null,
     accessibility_outages: accessibilityOutages,
+    ...snapshotFooter(
+      [
+        "stations",
+        ...(station ? (["station_ada"] as SnapshotName[]) : []),
+        ...(accessibilityOutages ? (["equipment"] as SnapshotName[]) : []),
+      ]
+    ),
     ...provenance(fetchedAt, feedTimestamp),
   };
 }
@@ -486,6 +495,8 @@ async function getServiceAlerts(args: {
     ],
     known_alert_types: Object.keys(EFFECT_BY_ALERT_TYPE),
     alerts: shaped,
+    // Stop names in affected_stops come from the station list.
+    ...snapshotFooter(["stations"]),
     ...provenance(fetchedAt, feedTimestamp),
   };
 }
@@ -515,6 +526,7 @@ function resolveStation(args: { query: string; route_id?: string }) {
       note: "Static snapshot of MTA's subway GTFS, bundled so station lookup makes no network call. MTA updates the regular subway GTFS a few times a year; re-generate with 'npm run stations'.",
     },
     ada_data: adaData(),
+    ...snapshotFooter(["stations", "station_ada"]),
   };
 }
 
@@ -871,6 +883,7 @@ async function getAccessibilityOutages(args: {
     other_station_outages: otherStation,
     inventory_data: inventoryData(),
     ada_data: station ? adaData() : null,
+    ...snapshotFooter(station ? ["equipment", "stations", "station_ada"] : ["equipment"]),
     ...provenance(fetchedAt),
   };
 }
