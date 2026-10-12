@@ -166,7 +166,7 @@ pinned("an unreadable date gives an 'unknown date' warning", () => {
   const w = snapshotWarning(["station_ada"], at("2026-10-12"));
   assert.equal(
     w,
-    "Station accessibility data has no readable as-of date. Run `npm run accessibility-data` in your mta-mcp folder to refresh."
+    "Station accessibility data has a missing, unreadable, or future as-of date. Run `npm run accessibility-data` in your mta-mcp folder to refresh."
   );
   assert.deepEqual(snapshotFooter(["station_ada"]).snapshot_as_of, { station_ada: null });
 });

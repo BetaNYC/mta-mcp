@@ -112,7 +112,7 @@ export function assessFreshness(
 export function stationListHint(): string {
   const spec = SNAPSHOTS.stations;
   const f = assessFreshness(spec.asOf(), spec.thresholdDays, clock());
-  const when = f.as_of === null ? "has no readable as-of date" : `is from ${f.as_of} (${f.age_days} days old)`;
+  const when = f.as_of === null ? "has a missing, unreadable, or future as-of date" : `is from ${f.as_of} (${f.age_days} days old)`;
   return `The bundled station list ${when}. If the station is new or renamed, run \`${spec.command}\` in your mta-mcp folder to refresh.`;
 }
 
@@ -128,7 +128,7 @@ export function snapshotWarning(names: SnapshotName[], nowMs: number): string | 
     if (!f.stale) continue;
     sentences.push(
       f.as_of === null
-        ? `${spec.label} has no readable as-of date.`
+        ? `${spec.label} has a missing, unreadable, or future as-of date.`
         : `${spec.label} is from ${f.as_of} (${f.age_days} days old).`
     );
     if (!commands.includes(spec.command)) commands.push(spec.command);
