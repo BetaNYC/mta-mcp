@@ -23,6 +23,7 @@
     "smoke": "node scripts/smoke.mjs",
     "stations": "node scripts/update-stations.mjs",
     "accessibility-data": "node scripts/update-accessibility-data.mjs",
+    "refresh-data": "npm run stations && npm run accessibility-data",
     "prepare": "npm run build"
   },
   "dependencies": {

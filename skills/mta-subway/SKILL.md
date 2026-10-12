@@ -82,8 +82,11 @@ can strand someone who uses a wheelchair.
   It's per station, not per complex: at 14 St-Union Sq the 4/5/6 station is
   not accessible and the others are. It's a dated snapshot, and it says a
   station has an accessible path, not that the path works today. The answer
-  says when the snapshot was pulled. If it's old and the answer matters, such
-  as event directions, suggest running `npm run accessibility-data` first.
+  says when the snapshot was pulled, in `snapshot_as_of`.
+- **Pass on `snapshot_warning`.** When it isn't `null`, a bundled snapshot is
+  past its age threshold. Tell the user, in its words, and suggest the command
+  it names before relying on the answer for event directions. A `null`
+  warning does not mean the data is current or official.
 - **No outage isn't proof the station is usable.** Never write "the elevators
   are working." Write what MTA lists, and when you checked.
 - **Use `stop_id`.** Rows are then placed by equipment ID from MTA's inventory,

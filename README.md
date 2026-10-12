@@ -30,6 +30,9 @@ This server runs from a local build and is not on npm. MTA's data terms rule
 out a published package, and [docs/terms-compliance.md](docs/terms-compliance.md)
 explains why.
 
+Station, ADA, and elevator inventory data ship as dated snapshots that **you
+refresh yourself**. See [Keep your data current](#keep-your-data-current).
+
 This is an unofficial tool. BetaNYC is not the MTA, and we make no claim that
 the data is accurate, complete, or timely. Riders should confirm service at
 [mta.info](https://www.mta.info).
@@ -282,6 +285,50 @@ There is no `npx` option. See [docs/terms-compliance.md](docs/terms-compliance.m
 
 ---
 
+## Keep your data current
+
+**Keeping the bundled data current is your job.** Three snapshots ship in
+`data/`, and nothing updates them for you:
+
+| File | What it holds | From | Refresh |
+|---|---|---|---|
+| `data/stations.json` | Station names, ids, and routes | MTA's static subway GTFS. MTA says it updates this a few times a year | `npm run stations` |
+| `data/station_ada.json` | Each station's ADA status | data.ny.gov `39hk-dx4f`. data.ny.gov lists its frequency as "As needed" | `npm run accessibility-data` |
+| `data/equipment.json` | Elevator and escalator inventory and alternate routes | data.ny.gov `94fv-bak7`. data.ny.gov lists "Daily" | `npm run accessibility-data` |
+
+The server never refreshes them itself, and there is no scheduled job. That is
+a design choice: the server contacts MTA only for its live feeds, in direct
+response to a tool call. [docs/terms-compliance.md](docs/terms-compliance.md)
+covers the terms that apply to the snapshots.
+
+Pull first, then refresh: after every `git pull`, or at least monthly, and
+before relying on an answer for an event or a publication:
+
+```bash
+cd /path/to/mta-mcp
+git restore data/       # drop your last local refresh, so the pull can't conflict
+git pull
+npm run refresh-data    # runs both: npm run stations, npm run accessibility-data
+npm test                # checks the new files still join up
+```
+
+This changes tracked files in `data/`. Run `git restore data/` before your next
+`git pull`, then refresh again. Then restart your MCP client so it loads the
+new files.
+
+You'll be reminded. Every answer that uses a snapshot includes
+`snapshot_as_of`, the date each one was pulled. Once a snapshot is older than
+its threshold, the answer also carries `snapshot_warning`, for example:
+
+> Station accessibility data is from 2026-09-22 (47 days old). Run
+> `npm run accessibility-data` in your mta-mcp folder to refresh.
+
+The thresholds are 30 days for the two data.ny.gov files and 90 for the
+station list. The server also logs each snapshot's date and age to stderr when
+it starts.
+
+---
+
 ## Configuration
 
 ### Claude Code
@@ -473,16 +520,10 @@ updates a few times a year. A new or renamed station won't resolve
 until the file is regenerated. An unrecognized `stop_id` returns a clear
 error. It does not answer for the whole route.
 
-```bash
-npm run stations            # re-download and rebuild data/stations.json
-npm run accessibility-data  # rebuild the ADA status and equipment inventory
-```
-
 The ADA status and equipment inventory are snapshots too, from data.ny.gov.
 MTA posts station ADA status as needed, so a newly accessible station can
-lag. We refresh them when we need them, not on a schedule: before relying on
-an answer for an event, run `npm run accessibility-data`. See
-[docs/data-sources.md](docs/data-sources.md).
+lag. How to refresh all three, and the warnings you'll see when they're old:
+[Keep your data current](#keep-your-data-current).
 
 Some stations serve more routes than the subway map shows. `628`
 (68 St–Hunter College) returns `4`, `6`, and `6X`, because the 4 runs local

@@ -11,6 +11,17 @@ This package is not published to npm. Version numbers track the local build. See
 
 ### Added
 
+- Stale-data warnings for the three bundled snapshots in `data/`. Every
+  answer that uses one carries `snapshot_as_of` (each snapshot's pull date,
+  New York time) and `snapshot_warning`, which is `null` until a snapshot is
+  older than its threshold (30 days for `station_ada.json` and
+  `equipment.json`, 90 for `stations.json`) or has no readable date, and then
+  gives the date, the age, and the refresh command. The server logs each
+  snapshot's date and age to stderr at startup. Nothing is refreshed
+  automatically; see "Keep your data current" in the README.
+- `npm run refresh-data` runs `npm run stations` and
+  `npm run accessibility-data`.
+
 - `skills/mta-subway/`: a Claude Code skill that runs the same four tools from
   the command line, with no MCP server. It uses the server's own code, returns
   compact JSON, and keeps a 60-second cache on disk. Setup in
