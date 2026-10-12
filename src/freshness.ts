@@ -61,24 +61,59 @@ function daysBetween(a: string, b: string): number {
   return Math.round((Date.parse(`${b}T00:00:00Z`) - Date.parse(`${a}T00:00:00Z`)) / DAY_MS);
 }
 
+// YYYY-MM-DD, or a full ISO 8601 timestamp with an explicit zone, as the
+// update scripts write it (toISOString). Anything else is unreadable: Date.parse
+// alone accepts "pulled 1" and "2026-02-30".
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+const ISO_DATETIME =
+  /^(\d{4})-(\d{2})-(\d{2})T([01]\d|2[0-3]):[0-5]\d(:[0-5]\d(\.\d{1,9})?)?(Z|[+-]([01]\d|2[0-3]):[0-5]\d)$/;
+
+/** True if y-m-d is a real calendar date (no 2026-02-30). */
+function realDate(y: string, m: string, d: string): boolean {
+  const t = new Date(Date.UTC(Number(y), Number(m) - 1, Number(d)));
+  return t.getUTCFullYear() === Number(y) && t.getUTCMonth() === Number(m) - 1 && t.getUTCDate() === Number(d);
+}
+
+/** New York calendar date of a recorded pull time, or null if unreadable. */
+export function parseAsOf(raw: string | undefined | null): string | null {
+  if (typeof raw !== "string") return null;
+  const date = ISO_DATE.exec(raw);
+  // A bare date is already a calendar date.
+  if (date) return realDate(date[1], date[2], date[3]) ? raw : null;
+  const dt = ISO_DATETIME.exec(raw);
+  if (!dt || !realDate(dt[1], dt[2], dt[3])) return null;
+  const ms = Date.parse(raw);
+  return Number.isFinite(ms) ? todayIso(new Date(ms)) : null;
+}
+
 /**
  * Age of one snapshot. Stale means older than the threshold: a snapshot
  * exactly thresholdDays old is not stale yet. A missing or unreadable date
- * counts as stale, since nothing says the data is current.
+ * counts as stale, since nothing says the data is current, and so does a date
+ * after today, which can only be a bad clock or a hand edit.
  */
 export function assessFreshness(
   asOfRaw: string | undefined | null,
   thresholdDays: number,
   nowMs: number
 ): Freshness {
-  const ms = typeof asOfRaw === "string" && asOfRaw !== "" ? Date.parse(asOfRaw) : NaN;
-  if (!Number.isFinite(ms)) {
+  const asOf = parseAsOf(asOfRaw);
+  const age = asOf === null ? NaN : daysBetween(asOf, todayIso(new Date(nowMs)));
+  if (asOf === null || age < 0) {
     return { as_of: null, age_days: null, threshold_days: thresholdDays, stale: true };
   }
-  // A bare date is already a calendar date; a timestamp is read in New York time.
-  const asOf = /^\d{4}-\d{2}-\d{2}$/.test(asOfRaw as string) ? (asOfRaw as string) : todayIso(new Date(ms));
-  const age = Math.max(0, daysBetween(asOf, todayIso(new Date(nowMs))));
   return { as_of: asOf, age_days: age, threshold_days: thresholdDays, stale: age > thresholdDays };
+}
+
+/**
+ * For an unknown stop_id: the station list's date and how to refresh it. A
+ * station missing from an old list is the most likely cause.
+ */
+export function stationListHint(): string {
+  const spec = SNAPSHOTS.stations;
+  const f = assessFreshness(spec.asOf(), spec.thresholdDays, clock());
+  const when = f.as_of === null ? "has no readable as-of date" : `is from ${f.as_of} (${f.age_days} days old)`;
+  return `The bundled station list ${when}. If the station is new or renamed, run \`${spec.command}\` in your mta-mcp folder to refresh.`;
 }
 
 /** The warning for some snapshots, or null when none is stale. */
@@ -139,6 +174,6 @@ export function startupNotice(nowMs: number): string[] {
   });
   const warning = snapshotWarning(names, nowMs);
   if (warning) lines.push(warning);
-  else lines.push("Snapshots are current. Refresh with `npm run refresh-data` after a git pull or monthly.");
+  else lines.push("Snapshots are within their refresh thresholds. Refresh with `npm run refresh-data` after a git pull or monthly.");
   return lines;
 }

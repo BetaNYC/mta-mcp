@@ -85,7 +85,8 @@ can strand someone who uses a wheelchair.
   says when the snapshot was pulled, in `snapshot_as_of`.
 - **Pass on `snapshot_warning`.** When it isn't `null`, a bundled snapshot is
   past its age threshold. Tell the user, in its words, and suggest the command
-  it names before relying on the answer for event directions.
+  it names before relying on the answer for event directions. A `null`
+  warning does not mean the data is current or official.
 - **No outage isn't proof the station is usable.** Never write "the elevators
   are working." Write what MTA lists, and when you checked.
 - **Use `stop_id`.** Rows are then placed by equipment ID from MTA's inventory,

@@ -43,7 +43,7 @@ import {
   stationName,
   todayIso,
 } from "./mta.js";
-import { type SnapshotName, snapshotFooter } from "./freshness.js";
+import { type SnapshotName, snapshotFooter, stationListHint } from "./freshness.js";
 
 const EFFECTS = [
   "reduced",
@@ -319,7 +319,7 @@ async function checkRouteOnDate(args: {
     // from the feed a few times a year, and a silently ignored stop_id would
     // widen the answer to the whole route.
     throw new Error(
-      `stop_id '${args.stop_id}' is not in the bundled station snapshot (${STATIONS.count} parent stations, generated ${STATIONS.generated_at}). Re-generate with 'npm run stations', or call resolve_station to find the right id.`
+      `stop_id '${args.stop_id}' is not in the bundled station snapshot (${STATIONS.count} parent stations). Call resolve_station to find the right id. ${stationListHint()}`
     );
   }
   if (!station && args.station) {
@@ -771,7 +771,7 @@ async function getAccessibilityOutages(args: {
     station = stationById(args.stop_id);
     if (!station) {
       throw new Error(
-        `stop_id '${args.stop_id}' is not in the bundled station snapshot (${STATIONS.count} parent stations). Call resolve_station to find the right id.`
+        `stop_id '${args.stop_id}' is not in the bundled station snapshot (${STATIONS.count} parent stations). Call resolve_station to find the right id. ${stationListHint()}`
       );
     }
     query = station.stop_name;
@@ -883,7 +883,11 @@ async function getAccessibilityOutages(args: {
     other_station_outages: otherStation,
     inventory_data: inventoryData(),
     ada_data: station ? adaData() : null,
-    ...snapshotFooter(station ? ["equipment", "stations", "station_ada"] : ["equipment"]),
+    // Only the files this answer read: the inventory places rows only when
+    // there is a station or a name to place them at.
+    ...snapshotFooter(
+      station ? ["equipment", "stations", "station_ada"] : query ? ["equipment"] : []
+    ),
     ...provenance(fetchedAt),
   };
 }

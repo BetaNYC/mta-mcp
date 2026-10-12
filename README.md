@@ -292,25 +292,29 @@ There is no `npx` option. See [docs/terms-compliance.md](docs/terms-compliance.m
 
 | File | What it holds | From | Refresh |
 |---|---|---|---|
-| `data/stations.json` | Station names, ids, and routes | MTA's static subway GTFS, updated a few times a year | `npm run stations` |
-| `data/station_ada.json` | Each station's ADA status | data.ny.gov `39hk-dx4f`, posted as needed | `npm run accessibility-data` |
-| `data/equipment.json` | Elevator and escalator inventory and alternate routes | data.ny.gov `94fv-bak7`, posted daily | `npm run accessibility-data` |
+| `data/stations.json` | Station names, ids, and routes | MTA's static subway GTFS. MTA says it updates this a few times a year | `npm run stations` |
+| `data/station_ada.json` | Each station's ADA status | data.ny.gov `39hk-dx4f`. data.ny.gov lists its frequency as "As needed" | `npm run accessibility-data` |
+| `data/equipment.json` | Elevator and escalator inventory and alternate routes | data.ny.gov `94fv-bak7`. data.ny.gov lists "Daily" | `npm run accessibility-data` |
 
 The server never refreshes them itself, and there is no scheduled job. That is
-on purpose: the server fetches only MTA's live feeds, in direct response to a
-tool call, and the snapshots are pulled offline by you.
-[docs/terms-compliance.md](docs/terms-compliance.md) explains why.
+a design choice: the server contacts MTA only for its live feeds, in direct
+response to a tool call. [docs/terms-compliance.md](docs/terms-compliance.md)
+covers the terms that apply to the snapshots.
 
-Refresh after every `git pull`, or at least monthly, and before relying on an
-answer for an event or a publication:
+Pull first, then refresh: after every `git pull`, or at least monthly, and
+before relying on an answer for an event or a publication:
 
 ```bash
 cd /path/to/mta-mcp
+git restore data/       # drop your last local refresh, so the pull can't conflict
+git pull
 npm run refresh-data    # runs both: npm run stations, npm run accessibility-data
 npm test                # checks the new files still join up
 ```
 
-Then restart your MCP client so it loads the new files.
+This changes tracked files in `data/`. Run `git restore data/` before your next
+`git pull`, then refresh again. Then restart your MCP client so it loads the
+new files.
 
 You'll be reminded. Every answer that uses a snapshot includes
 `snapshot_as_of`, the date each one was pulled. Once a snapshot is older than

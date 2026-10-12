@@ -263,9 +263,11 @@ record is on its own line, so a refresh shows only what changed.
 `npm run refresh-data` runs both commands.
 
 Nothing refreshes the snapshots for you: the server never fetches them, and
-there is no scheduled job. Refresh after every `git pull` or monthly, before
-relying on an answer for an event or a publication, and when MTA announces a
-newly accessible station.
+there is no scheduled job. Refresh after every `git pull` (pull first, then
+refresh) or monthly, before relying on an answer for an event or a
+publication, and when MTA announces a newly accessible station. A refresh
+changes tracked files in `data/`, so run `git restore data/` before your next
+`git pull`, then refresh again.
 
 Each file records when it was pulled: `source.data_pulled_at` in
 `station_ada.json` and `equipment.json`, and `generated_at` in
