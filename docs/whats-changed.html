@@ -27,17 +27,20 @@ h1,h2{color:var(--blue);font-weight:700;line-height:1.2}
 h1{font-size:clamp(28px,5vmin,46px);margin:32px 0 12px}
 p{margin:0 0 16px} a{color:var(--blue)}
 a:focus-visible{outline:3px solid var(--blue);outline-offset:2px}
-.skip{position:absolute;left:-9999px;top:0;background:var(--white);color:var(--blue);
-      padding:10px 14px;font-weight:700;z-index:100}
-.skip:focus{left:8px;top:8px}
+/* Every standalone control is a 44px tap target, as in the renderer's page format. Links
+   inside a sentence (alpha bar, footer) are inline text and are left at text height. */
+.skip{position:absolute;left:-9999px;top:0;background:var(--blue);color:#fff;padding:0 1rem;
+      display:inline-flex;align-items:center;min-height:44px;box-sizing:border-box;
+      font-weight:700;z-index:100}
+.skip:focus{left:0}
 .alpha-bar{background:var(--warn);color:#fff;font-weight:700;font-size:14px;text-align:center;
            padding:9px 16px}
 .alpha-bar a{color:#fff;text-decoration:underline}
 header.site{background:var(--bg-blue);border-bottom:1px solid var(--border);padding:16px 0}
 header.site .wrap{display:flex;flex-wrap:wrap;gap:8px 24px;align-items:center;justify-content:space-between}
-.brand{font-weight:700;font-size:20px;text-decoration:none}
+.brand{font-weight:700;font-size:20px;text-decoration:none;display:inline-flex;align-items:center;min-height:44px}
 .brand:hover{text-decoration:underline}
-nav.site-nav a{display:inline-block;min-height:44px;line-height:44px;margin-right:16px}
+nav.site-nav a{display:inline-flex;align-items:center;min-height:44px;margin-right:16px}
 footer.site{background:var(--bg-blue);border-top:1px solid var(--border);margin-top:64px;
             padding:34px 0;font-size:14px}
 .small{font-size:14px;color:var(--body)}
