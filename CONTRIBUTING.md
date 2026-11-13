@@ -121,7 +121,8 @@ A pull request that changes what the server returns, or which tools it has:
 On the day it merges, the last commit on the branch dates it:
 
 1. `## Unreleased: Title` becomes `## YYYY-MM-DD: Title`, same title, with the
-   New York date (`TZ=America/New_York date +%F`).
+   New York date (`TZ=America/New_York date +%F`). Once the
+   entry is on `main`, its title never changes, dated or not; CI rejects it.
 2. The `CHANGELOG.md` heading gets the same date: `## [X.Y.Z] — YYYY-MM-DD`.
 3. The entry's MCP version link gains that heading's anchor. Compute it, never
    write it by hand:
