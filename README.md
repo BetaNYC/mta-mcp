@@ -57,7 +57,7 @@ BetaNYC is adding to each of its MCP servers.
 | `resolve_station` | Free-text station name to GTFS parent-station id, with the routes serving it and its ADA status |
 | `get_accessibility_outages` | Elevator and escalator outages, current, upcoming, or on a date, with MTA's alternate routes |
 | `whats_changed` | What changed in this server, newest first, from [WHATS-CHANGED.md](WHATS-CHANGED.md), including corrections |
-| `about_betanyc` | Who built this server, where to report a problem, and BetaNYC's links |
+| `about_betanyc` | Who built this server, where to report a bug in this server or ask for a new feature, and BetaNYC's links |
 
 Every field in every answer is documented in [docs/tools.md](docs/tools.md).
 Elevators and escalators have their own guide, including known gaps:
@@ -274,8 +274,8 @@ repository and makes no request.
 
 ### `about_betanyc`
 
-Who built the server, its version, where to report a problem, and links to
-BetaNYC. No parameters, no request.
+Who built the server, its version, where to report a bug in this server or
+ask for a new feature, and links to BetaNYC. No parameters, no request.
 
 Both answer in plain text plus `structuredContent` that matches a declared
 `outputSchema`, not in the compact JSON the other four use. They come from

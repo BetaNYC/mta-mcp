@@ -5,12 +5,12 @@ This page lists the changes to mta-mcp that a reader would notice: new tools, ne
 - **History begins:** 2026-09-17, the first version. Corrections made before this date may be missing.
 - **Data refresh:** Service alerts and elevator and escalator outages come from MTA's live feeds each time a tool is called. Station names, each station's accessibility status and MTA's elevator inventory are snapshots kept in the repository and refreshed by hand when needed.
 
-mta-mcp is not published to npm. You run it from your own copy of the repository, so a change reaches you when you update that copy and rebuild it. To report a problem with this server or ask for a feature, [open an issue on GitHub](https://github.com/BetaNYC/mta-mcp/issues).
+mta-mcp is not published to npm. You run it from your own copy of the repository, so a change reaches you when you update that copy and rebuild it. To report a bug in this server or ask for a new feature, [open an issue on GitHub](https://github.com/BetaNYC/mta-mcp/issues).
 
 ## Unreleased: A What's changed page, and two tools that explain the server
 
 - **Tags:** Site, MCP
-- **What changed:** The website has a new page that lists every change a reader would notice. Two new tools let your AI assistant answer "what's new in this server?" and "who built this?" with links to BetaNYC and to the place to report a problem with this server. Version 0.2.0 is the first new version number since 0.1.0, so it also carries the September and October changes listed below.
+- **What changed:** The website has a new page that lists every change a reader would notice. Two new tools let your AI assistant answer "what's new in this server?" and "who built this?" with links to BetaNYC and to the place to report a bug in this server or ask for a new feature. Version 0.2.0 is the first new version number since 0.1.0, so it also carries the September and October changes listed below.
 - **MCP version:** [mta-mcp 0.2.0](CHANGELOG.md)
 - **More detail:** [What's changed on the website](https://betanyc.github.io/mta-mcp/whats-changed.html) · [Release notes](CHANGELOG.md)
 

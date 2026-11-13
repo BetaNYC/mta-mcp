@@ -22,10 +22,10 @@ BetaNYC/betanyc-ai-workspace#1645 (epic #1637).
 - `whats_changed`: what changed in this server, newest first, from `WHATS-CHANGED.md`
   (filters: `since`, `tag`, `limit`). Answers with readable text and `structuredContent`
   matching a declared `outputSchema`.
-- `about_betanyc`: who built the server, the repository, where to report a problem, and
+- `about_betanyc`: who built the server, the repository, where to report a bug in this server or ask for a new feature, and
   BetaNYC's links.
 - `src/betanyc-tools.ts`, copied unchanged from the workspace's
-  `scripts/mcp_shared/betanyc-tools.ts` (v1.1.1). Never edit the copy; change the canonical
+  `scripts/mcp_shared/betanyc-tools.ts` (v1.2.0). Never edit the copy; change the canonical
   file and copy it again.
 - `WHATS-CHANGED.md`, the reader-facing record of changes, backfilled to 0.1.0. The server
   reads it from the repository root at run time.
