@@ -276,3 +276,7 @@ snapshot reports them in `snapshot_as_of`, and adds `snapshot_warning` once a
 snapshot is more than 30 days old (the two data.ny.gov files) or 90 days old
 (the station list). The server also logs each date and age to stderr at
 startup. See [Keep your data current](../README.md#keep-your-data-current).
+
+---
+
+[mta-mcp home](https://betanyc.github.io/mta-mcp/) · [What's changed](https://betanyc.github.io/mta-mcp/whats-changed.html) · [Code on GitHub](https://github.com/BetaNYC/mta-mcp)

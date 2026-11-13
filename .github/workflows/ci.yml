@@ -27,7 +27,8 @@
 # There is no release.yml and no npm publish step, and that is deliberate: this
 # package is private and is never published. See docs/terms-compliance.md. The
 # What's changed release gate (`whats_changed.py check --release`) is therefore
-# a release-day step in CONTRIBUTING.md, "Releases", not a workflow step.
+# a step in the PR's last commit (CONTRIBUTING.md, "Releases"), and the
+# whats-changed-released job below runs it on every push to main.
 
 name: CI
 
@@ -127,3 +128,24 @@ jobs:
           python3 scripts/whats_changed.py render WHATS-CHANGED.md --format fragment
           --into docs/whats-changed.html
           --repo-url https://github.com/BetaNYC/mta-mcp --check
+
+  # Release day is merge day here: people build whatever is on main, so an entry that reaches
+  # main still headed "## Unreleased:" is a release without a date. The PR's last commit before
+  # merge dates it (CONTRIBUTING.md, "Releases"). This job runs only on pushes to main and fails
+  # loudly if that step was missed, so the gap is visible at once. Fix it with a follow-up PR
+  # that dates the entry and the CHANGELOG heading.
+  whats-changed-released:
+    name: What's changed on main is dated
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: WHATS-CHANGED.md has no Unreleased entry
+        run: python3 scripts/whats_changed.py check WHATS-CHANGED.md --release

@@ -1,4 +1,4 @@
-// whats_changed and about_betanyc, the two tools every BetaNYC MCP server carries
+// whats_changed and about_betanyc, the two tools BetaNYC is adding to each of its MCP servers
 // (betanyc-ai-workspace platform/system/whats-changed-standard.md § 7). They read this repo's
 // WHATS-CHANGED.md and fixed text, and never make a request: fetch is replaced with one that
 // fails the test if it is called.
@@ -118,5 +118,17 @@ test("over stdio, the SDK client accepts both answers against their output schem
     assert.equal(about.structuredContent.server.version, pkg.version);
   } finally {
     await client.close();
+  }
+});
+
+test("every published page under docs/ links to the What's changed page", async () => {
+  // GitHub Pages builds main:/docs with Jekyll, so each .md there is a published page too.
+  const { readdirSync } = await import("node:fs");
+  const dir = new URL("../docs/", import.meta.url);
+  const pages = readdirSync(dir).filter((f) => f.endsWith(".md") || f.endsWith(".html"));
+  assert.ok(pages.length >= 6, pages.join(", "));
+  for (const f of pages) {
+    const body = readFileSync(new URL(f, dir), "utf8");
+    assert.match(body, /whats-changed\.html/, f);
   }
 });

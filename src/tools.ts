@@ -48,7 +48,7 @@ import { type SnapshotName, snapshotFooter, stationListHint } from "./freshness.
 import { createBetanycTools } from "./betanyc-tools.js";
 
 /**
- * whats_changed and about_betanyc, the two tools every BetaNYC MCP server carries
+ * whats_changed and about_betanyc, the two tools BetaNYC is adding to each of its MCP servers
  * (betanyc-ai-workspace platform/system/whats-changed-standard.md § 7). betanyc-tools.ts is
  * a copy of the workspace's canonical file: never edit it here. This server is not on npm and
  * runs from a local build, so WHATS-CHANGED.md is read from the repository root, one level

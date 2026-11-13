@@ -305,8 +305,8 @@ are MTA's estimates. Read the [gaps](accessibility.md#gaps) first.
 
 ## `whats_changed` and `about_betanyc`
 
-The two tools every BetaNYC MCP server carries, with the same names, inputs,
-and output everywhere. They come from `src/betanyc-tools.ts`, a copy of the
+The two tools BetaNYC is adding to each of its MCP servers, with the same
+names, inputs, and output in each. They come from `src/betanyc-tools.ts`, a copy of the
 BetaNYC workspace's `scripts/mcp_shared/betanyc-tools.ts`; change it there,
 never here. Neither makes a request.
 
@@ -326,3 +326,7 @@ where to report a bug or ask for a feature.
 Both answer in plain text plus `structuredContent` that matches the
 `outputSchema` they declare, and an unknown parameter is an error, as for the
 other four.
+
+---
+
+[mta-mcp home](https://betanyc.github.io/mta-mcp/) · [What's changed](https://betanyc.github.io/mta-mcp/whats-changed.html) · [Code on GitHub](https://github.com/BetaNYC/mta-mcp)

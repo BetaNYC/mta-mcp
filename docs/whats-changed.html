@@ -132,7 +132,7 @@ footer.site{background:var(--bg-blue);border-top:1px solid var(--border);margin-
 <h2 id="2026-09-23-some-elevator-outages-were-missed-or-shown-at-the-wrong-station-title">Some elevator outages were missed or shown at the wrong station</h2>
 <p class="wc-meta"><time datetime="2026-09-23">September 23, 2026</time></p>
 <p class="wc-tags"><span class="wc-visually-hidden">Tags: </span><span class="wc-tag">MCP</span><span class="wc-visually-hidden">, </span><span class="wc-tag wc-tag-correction">Correction</span></p>
-<p>From September 17 to September 23, 2026, MTA&#x27;s elevator feed spelled some stations differently from the station list, and the server did not match them. Searches for Bedford Park Blvd and 42 St-Port Authority returned no outages when there were some. Matching by name also put some outages at a different station with the same name: against the saved feeds, 13 such pairings were wrong. The fixes on September 23 match the different spellings and place outages by MTA&#x27;s equipment number first.</p>
+<p>From September 17 to September 23, 2026, MTA&#x27;s elevator feed spelled some stations differently from the station list, and the server did not match them. Searches for Bedford Park Blvd and 42 St-Port Authority returned no outages when there were some. Matching by name also put some outages at a different station with a similar name: against the saved feeds, 13 such pairings were wrong. The fixes on September 23 match the different spellings and place outages by MTA&#x27;s equipment number first.</p>
 <div class="wc-old-numbers"><p><strong>If you used the old numbers:</strong> If you checked elevators or escalators at a station during that week, for example to tell people which station to use, check the station again with the current version. Elevator status changes often, so an answer from that week is out of date in any case.</p></div>
 <p><strong>MCP version:</strong> <a href="https://github.com/BetaNYC/mta-mcp/blob/HEAD/CHANGELOG.md">mta-mcp</a> as built from the main branch from September 23, 2026 on. The version number was still 0.1.0; the release notes list this under 0.2.0.</p>
 <p><strong>More detail:</strong> <a href="https://github.com/BetaNYC/mta-mcp/pull/1">The first fix</a> · <a href="https://github.com/BetaNYC/mta-mcp/pull/2">The second fix</a> · <a href="https://github.com/BetaNYC/mta-mcp/blob/HEAD/docs/accessibility.md">Elevators, escalators and accessibility</a></p>
@@ -227,6 +227,11 @@ footer.site{background:var(--bg-blue);border-top:1px solid var(--border);margin-
     <p><strong>mta-mcp</strong> — built by <a href="https://beta.nyc">BetaNYC</a>.
     MIT licensed. The MIT license covers this code, not MTA's data or trademarks.
     <a href="whats-changed.html">What's changed</a>.</p>
+    <p class="small">More about this server: the
+    <a href="https://github.com/BetaNYC/mta-mcp/blob/main/docs/tools.md">tool reference</a>,
+    <a href="https://github.com/BetaNYC/mta-mcp/blob/main/docs/accessibility.md">elevators, escalators, and accessibility</a>,
+    <a href="https://github.com/BetaNYC/mta-mcp/blob/main/docs/data-sources.md">data sources</a>, and
+    <a href="https://github.com/BetaNYC/mta-mcp/blob/main/docs/terms-compliance.md">why this is not on npm</a>.</p>
     <p class="small"><strong>Unofficial.</strong> BetaNYC is not the MTA and makes no claim that
     this data is accurate, complete, or timely. Confirm service at
     <a href="https://mta.info">mta.info</a> before you travel.</p>

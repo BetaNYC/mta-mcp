@@ -47,8 +47,8 @@ answer: [WHATS-CHANGED.md](WHATS-CHANGED.md), also on the
 
 ## What it does
 
-Exposes 6 tools over MCP: four that answer from MTA's data, and two that every
-BetaNYC MCP server carries.
+Exposes 6 tools over MCP: four that answer from MTA's data, and the two tools
+BetaNYC is adding to each of its MCP servers.
 
 | Tool | Description |
 |---|---|
@@ -279,8 +279,8 @@ BetaNYC. No parameters, no request.
 
 Both answer in plain text plus `structuredContent` that matches a declared
 `outputSchema`, not in the compact JSON the other four use. They come from
-`src/betanyc-tools.ts`, a copy of a file shared by every BetaNYC MCP server:
-change it in the BetaNYC workspace, never here.
+`src/betanyc-tools.ts`, a copy of a file BetaNYC is adding to each of its MCP
+servers: change it in the BetaNYC workspace, never here.
 
 ---
 

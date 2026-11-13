@@ -13,8 +13,8 @@ This package is not published to npm. Version numbers track the local build. See
 
 The first version number since 0.1.0. Everything below reached the main branch between
 2026-09-23 and 2026-10-12 while `package.json` still said 0.1.0, because this server is
-installed by building the main branch, not from npm. 0.2.0 adds the two tools every BetaNYC
-MCP server carries and gathers those earlier changes under one number. Tracking:
+installed by building the main branch, not from npm. 0.2.0 adds the two tools BetaNYC is
+adding to each of its MCP servers and gathers those earlier changes under one number. Tracking:
 BetaNYC/betanyc-ai-workspace#1645 (epic #1637).
 
 ### Added
@@ -32,8 +32,11 @@ BetaNYC/betanyc-ai-workspace#1645 (epic #1637).
 - `docs/whats-changed.html`, built from it by `scripts/whats_changed.py` (copied unchanged
   from the workspace). The landing page links to it in its footer.
 - CI: a `whats-changed` job runs `whats_changed.py check --base-ref` (append-only, and a
-  version bump needs an entry) and `render --check` on the page. There is no publish step,
-  so the release gate (`check --release`) is a release-day step in CONTRIBUTING.md.
+  version bump needs an entry) and `render --check` on the page. There is no publish step:
+  the PR's last commit before merge dates the entry (CONTRIBUTING.md, "Releases"), and a
+  `whats-changed-released` job runs `check --release` on every push to main so an undated
+  entry on main fails at once.
+- A "What's changed" link at the foot of every published page under `docs/`.
 - The skill script prints the plain-text answer for the two new tools, which do not return
   JSON.
 

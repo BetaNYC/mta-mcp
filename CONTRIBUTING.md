@@ -128,8 +128,13 @@ On the day it merges, the last commit on the branch dates it:
    `python3 -c "import sys; sys.path.insert(0,'scripts'); import whats_changed as w; print(w.github_slug('[X.Y.Z] — YYYY-MM-DD'))"`
 4. Rebuild `docs/whats-changed.html` with the command above.
 5. Run `python3 scripts/whats_changed.py check WHATS-CHANGED.md --release`. It
-   fails while an `Unreleased` entry is left. No workflow runs it for you,
-   because there is no publish step.
+   fails while an `Unreleased` entry is left.
+
+**Do not merge a pull request whose `WHATS-CHANGED.md` entry still says
+`Unreleased`.** Its last commit before merge must date the entry and the
+`CHANGELOG.md` heading. CI's "What's changed on main is dated" job runs
+`check --release` on every push to `main` and fails if an undated entry got
+through; fix that the same day with a pull request that dates it.
 
 Merge, then tag the merge commit `vX.Y.Z` and push the tag. If the merge slips
 to another day, date it again. Never rewrite an older entry in
