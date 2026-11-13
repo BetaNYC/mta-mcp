@@ -863,9 +863,17 @@ test("routesByParentStation folds platform rows up to the station", () => {
 
 // ─── Schema surface ──────────────────────────────────────────────────────────
 
-test("four tools are advertised, with the names the docs use", () => {
+test("six tools are advertised, with the names the docs use", () => {
+  // The four MTA tools, plus whats_changed and about_betanyc (the BetaNYC standard tools).
   assert.deepEqual(
     TOOLS.map((t) => t.name).sort(),
-    ["check_route_on_date", "get_accessibility_outages", "get_service_alerts", "resolve_station"]
+    [
+      "about_betanyc",
+      "check_route_on_date",
+      "get_accessibility_outages",
+      "get_service_alerts",
+      "resolve_station",
+      "whats_changed",
+    ]
   );
 });

@@ -25,7 +25,10 @@
 # partial pass rather than a miss. Do not re-add the quotes.
 #
 # There is no release.yml and no npm publish step, and that is deliberate: this
-# package is private and is never published. See docs/terms-compliance.md.
+# package is private and is never published. See docs/terms-compliance.md. The
+# What's changed release gate (`whats_changed.py check --release`) is therefore
+# a step in the PR's last commit (CONTRIBUTING.md, "Releases"), and the
+# whats-changed-released job below runs it on every push to main.
 
 name: CI
 
@@ -45,6 +48,9 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/**"
+      - "WHATS-CHANGED.md"
+      - "CHANGELOG.md"
+      - "docs/**"
   push:
     branches: [main]
     paths:
@@ -56,6 +62,9 @@ on:
       - "package.json"
       - "package-lock.json"
       - ".github/workflows/**"
+      - "WHATS-CHANGED.md"
+      - "CHANGELOG.md"
+      - "docs/**"
   # Manual trigger — a path-scoped pull_request/push event does not fire on the
   # very PR that introduces the workflow, so without this the gate would never
   # run on its own PR.
@@ -89,3 +98,54 @@ jobs:
 
       - name: Build and test
         run: npm test
+
+  # The What's changed standard (betanyc-ai-workspace
+  # platform/system/whats-changed-standard.md § 10). scripts/whats_changed.py is a copy of the
+  # workspace's canonical file: never edit it here. `check --base-ref` needs the base branch's
+  # history (fetch-depth: 0): old entries are append-only, and a package.json version bump
+  # needs an MCP entry naming the new version. `render --check` fails when
+  # docs/whats-changed.html no longer matches WHATS-CHANGED.md; rebuild it with the same
+  # command without --check. Stdlib only, so no pip install, and no request to MTA.
+  whats-changed:
+    name: What's changed
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Check WHATS-CHANGED.md
+        run: python3 scripts/whats_changed.py check WHATS-CHANGED.md --base-ref "origin/${{ github.base_ref || 'main' }}"
+
+      - name: The website's What's changed page matches the file
+        run: >-
+          python3 scripts/whats_changed.py render WHATS-CHANGED.md --format fragment
+          --into docs/whats-changed.html
+          --repo-url https://github.com/BetaNYC/mta-mcp --check
+
+  # Release day is merge day here: people build whatever is on main, so an entry that reaches
+  # main still headed "## Unreleased:" is a release without a date. The PR's last commit before
+  # merge dates it (CONTRIBUTING.md, "Releases"). This job runs only on pushes to main and fails
+  # loudly if that step was missed, so the gap is visible at once. Fix it with a follow-up PR
+  # that dates the entry and the CHANGELOG heading.
+  whats-changed-released:
+    name: What's changed on main is dated
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: WHATS-CHANGED.md has no Unreleased entry
+        run: python3 scripts/whats_changed.py check WHATS-CHANGED.md --release

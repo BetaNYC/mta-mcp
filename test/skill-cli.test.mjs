@@ -119,11 +119,26 @@ test("a missing build exits 2 and says how to fix it", () => {
   assert.match(r.err, /npm install/);
 });
 
-test("--help lists all four tools", () => {
+test("--help lists all six tools", () => {
   const r = run(["--help"], freshCache());
   assert.equal(r.code, 0, r.err);
-  for (const name of ["check_route_on_date", "get_service_alerts", "resolve_station", "get_accessibility_outages"]) {
+  for (const name of ["check_route_on_date", "get_service_alerts", "resolve_station", "get_accessibility_outages", "whats_changed", "about_betanyc"]) {
     assert.ok(r.out.includes(name), name);
   }
   assert.ok(existsSync(script));
+});
+
+test("whats_changed and about_betanyc print their plain-text answers, with no request to MTA", () => {
+  // These two answer in text, not JSON, and read only WHATS-CHANGED.md and fixed text.
+  const env = { ...freshCache(), FIXTURE_FETCH: "block" };
+  const wc = run(["whats_changed", '{"tag":"Correction"}'], env);
+  assert.equal(wc.code, 0, wc.err);
+  assert.match(wc.out, /^What's changed in mta-mcp /);
+  assert.match(wc.out, /Some elevator outages were missed or shown at the wrong station/);
+  const about = run(["about_betanyc", "{}"], env);
+  assert.equal(about.code, 0, about.err);
+  assert.match(about.out, /built by BetaNYC, a project of the Fund for the City of New York/);
+  const bad = run(["whats_changed", '{"route_id":"6"}'], env);
+  assert.equal(bad.code, 1);
+  assert.match(bad.err, /does not accept 'route_id'/);
 });

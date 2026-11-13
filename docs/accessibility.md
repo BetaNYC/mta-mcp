@@ -513,3 +513,7 @@ MTA's alerts page shows route names as images, so a screen reader or a
 copy-paste loses which train an alert is about. This server returns routes as
 text (`"6"`, `"A"`), and quotes MTA's `header_text`, which writes routes as
 `[6]`. Answers work with a screen reader and paste cleanly into email.
+
+---
+
+[mta-mcp home](https://betanyc.github.io/mta-mcp/) · [What's changed](https://betanyc.github.io/mta-mcp/whats-changed.html) · [Code on GitHub](https://github.com/BetaNYC/mta-mcp)

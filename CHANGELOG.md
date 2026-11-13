@@ -9,7 +9,43 @@ This package is not published to npm. Version numbers track the local build. See
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-11-12
+
+The first version number since 0.1.0. Everything below reached the main branch between
+2026-09-23 and 2026-10-12 while `package.json` still said 0.1.0, because this server is
+installed by building the main branch, not from npm. 0.2.0 adds the two tools BetaNYC is
+adding to each of its MCP servers and gathers those earlier changes under one number. Tracking:
+BetaNYC/betanyc-ai-workspace#1645 (epic #1637).
+
 ### Added
+
+- `whats_changed`: what changed in this server, newest first, from `WHATS-CHANGED.md`
+  (filters: `since`, `tag`, `limit`). Answers with readable text and `structuredContent`
+  matching a declared `outputSchema`.
+- `about_betanyc`: who built the server, the repository, where to report a bug in this server or ask for a new feature, and
+  BetaNYC's links.
+- `src/betanyc-tools.ts`, copied unchanged from the workspace's
+  `scripts/mcp_shared/betanyc-tools.ts` (v1.2.1). Never edit the copy; change the canonical
+  file and copy it again.
+- `WHATS-CHANGED.md`, the reader-facing record of changes, backfilled to 0.1.0. The server
+  reads it from the repository root at run time.
+- `docs/whats-changed.html`, built from it by `scripts/whats_changed.py` (copied unchanged
+  from the workspace). The landing page links to it in its footer.
+- CI: a `whats-changed` job runs `whats_changed.py check --base-ref` (append-only, and a
+  version bump needs an entry) and `render --check` on the page. There is no publish step:
+  the PR's last commit before merge dates the entry (CONTRIBUTING.md, "Releases"), and a
+  `whats-changed-released` job runs `check --release` on every push to main so an undated
+  entry on main fails at once.
+- A "What's changed" link at the foot of every published page under `docs/`.
+- The skill script prints the plain-text answer for the two new tools, which do not return
+  JSON.
+
+### Changed
+
+- Six tools instead of four: README, landing page, skill guide and the tool-list tests.
+- `package.json` and the alpha notices in the README and on the landing page say 0.2.0.
+
+### Added before 0.2.0 (on main from 2026-09-23 to 2026-10-12)
 
 - Stale-data warnings for the three bundled snapshots in `data/`. Every
   answer that uses one carries `snapshot_as_of` (each snapshot's pull date,
@@ -81,7 +117,7 @@ This package is not published to npm. Version numbers track the local build. See
 - 27 tests for the ADA status, the ID join, the complex and fallback cases,
   `include_accessibility`, the generator, and the committed snapshots.
 
-### Changed
+### Changed before 0.2.0
 
 - The data.ny.gov snapshots are refreshed when needed, not on a schedule.
   The docs now say to check the snapshot's pulled date and run
@@ -99,7 +135,7 @@ This package is not published to npm. Version numbers track the local build. See
 - An alert with no `active_period` now counts as active on every date, as the
   GTFS-realtime reference says. It used to count on none.
 
-### Fixed
+### Fixed before 0.2.0
 
 - `get_accessibility_outages` missed outages at stations MTA spells
   differently in its elevator feed, by name and by `stop_id`. It now splits a

@@ -1,6 +1,6 @@
 # mta-mcp
 
-> ⚠️ **Alpha, v0.1.0.** This is early code. We are sharing it now to find out
+> ⚠️ **Alpha, v0.2.0.** This is early code. We are sharing it now to find out
 > what breaks. Tool names, parameters, and response shapes may change without
 > notice, so please don't build anything important on it yet.
 >
@@ -39,11 +39,16 @@ the data is accurate, complete, or timely. Riders should confirm service at
 
 Vibe coded with [Claude](https://claude.ai) by [BetaNYC](https://beta.nyc).
 
+What changed, newest first, including corrections when the server gave a wrong
+answer: [WHATS-CHANGED.md](WHATS-CHANGED.md), also on the
+[website](https://betanyc.github.io/mta-mcp/whats-changed.html).
+
 ---
 
 ## What it does
 
-Exposes 4 tools over MCP:
+Exposes 6 tools over MCP: four that answer from MTA's data, and the two tools
+BetaNYC is adding to each of its MCP servers.
 
 | Tool | Description |
 |---|---|
@@ -51,6 +56,8 @@ Exposes 4 tools over MCP:
 | `get_service_alerts` | All alerts active on a date, filterable by route, type, and effect |
 | `resolve_station` | Free-text station name to GTFS parent-station id, with the routes serving it and its ADA status |
 | `get_accessibility_outages` | Elevator and escalator outages, current, upcoming, or on a date, with MTA's alternate routes |
+| `whats_changed` | What changed in this server, newest first, from [WHATS-CHANGED.md](WHATS-CHANGED.md), including corrections |
+| `about_betanyc` | Who built this server, where to report a bug in this server or ask for a new feature, and BetaNYC's links |
 
 Every field in every answer is documented in [docs/tools.md](docs/tools.md).
 Elevators and escalators have their own guide, including known gaps:
@@ -256,6 +263,25 @@ this tool. In short:
   estimated return counts as ongoing, and `date_caveats` says which rows that
   applies to.
 
+### `whats_changed`
+
+What changed in this server, newest first, from
+[WHATS-CHANGED.md](WHATS-CHANGED.md): new tools, new data, fixes, and
+corrections, each with what to re-check if you used an old answer. Optional
+`since` (`YYYY-MM-DD`), `tag` (`Site`, `Data`, `MCP` or `Correction`) and
+`limit` (1 to 50, default 10). It reads the file in your copy of the
+repository and makes no request.
+
+### `about_betanyc`
+
+Who built the server, its version, where to report a bug in this server or
+ask for a new feature, and links to BetaNYC. No parameters, no request.
+
+Both answer in plain text plus `structuredContent` that matches a declared
+`outputSchema`, not in the compact JSON the other four use. They come from
+`src/betanyc-tools.ts`, a copy of a file BetaNYC is adding to each of its MCP
+servers: change it in the BetaNYC workspace, never here.
+
 ---
 
 ## Prerequisites
@@ -397,7 +423,9 @@ The answers are the same. The difference is where it works and what it costs:
   Desktop or other chat apps.
 - **The MCP server** works in any app that supports MCP, and spaces out every
   request to MTA in one place. It adds about 1,000 tokens of tool descriptions
-  to every conversation.
+  to every conversation for the four MTA tools. Since 0.2.0, `whats_changed`
+  and `about_betanyc` make the whole tool list about 1.8 times as long, in
+  characters.
 
 Setup and a fuller comparison: [skills/README.md](skills/README.md).
 
@@ -583,6 +611,7 @@ Layout:
 |---|---|
 | `src/index.ts` | stdio server wiring, nothing else |
 | `src/tools.ts` | tool schemas, strict argument parsing, dispatch |
+| `src/betanyc-tools.ts` | `whats_changed` and `about_betanyc`, a copy of the BetaNYC shared module. Never edit it here |
 | `src/mta.ts` | fetch, rate limiting, parsing, effect classification, station matching |
 | `src/mta.test.ts` | unit tests for the pure functions |
 | `test/*.test.mjs` | tool-level, schema, rate-limiter, and skill tests against fixtures |
@@ -597,6 +626,9 @@ Layout:
 | `scripts/update-stations.mjs` | regenerates `data/stations.json` from MTA's static GTFS |
 | `scripts/update-accessibility-data.mjs` | regenerates the two data.ny.gov snapshots |
 | `scripts/smoke.mjs` | the single live request |
+| `scripts/whats_changed.py` | checks `WHATS-CHANGED.md` and builds `docs/whats-changed.html`, a copy of the BetaNYC shared script. Never edit it here |
+| `WHATS-CHANGED.md` | the reader-facing record of changes, read by `whats_changed` |
+| `docs/whats-changed.html` | the website's What's changed page, built from `WHATS-CHANGED.md` |
 
 Tool schemas reject unknown parameters, with an error that names the bad key
 and lists the accepted ones. Dropping a mistyped filter would return
@@ -689,7 +721,9 @@ Two things a pull request must not do:
   [docs/terms-compliance.md](docs/terms-compliance.md).
 - Add a network call to the test suite.
 
-Version history is in [CHANGELOG.md](CHANGELOG.md).
+Version history is in [CHANGELOG.md](CHANGELOG.md), and the plain-language
+record is [WHATS-CHANGED.md](WHATS-CHANGED.md). How a new version is dated and
+tagged: [CONTRIBUTING.md, Releases](CONTRIBUTING.md#releases).
 
 ## Support our work
 

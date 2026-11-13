@@ -93,3 +93,7 @@ a separate document. We bundle dated snapshots in `data/`, generated offline,
 and the server never fetches them, so nothing about them changes the npm
 reasoning above. The obligations to call the output unofficial and possibly
 stale apply to them too. Details in [data-sources.md](data-sources.md#terms).
+
+---
+
+[mta-mcp home](https://betanyc.github.io/mta-mcp/) · [What's changed](https://betanyc.github.io/mta-mcp/whats-changed.html) · [Code on GitHub](https://github.com/BetaNYC/mta-mcp)

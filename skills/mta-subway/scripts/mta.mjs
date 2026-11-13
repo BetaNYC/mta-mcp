@@ -99,6 +99,13 @@ if (result.isError) {
   process.exit(1);
 }
 
+// whats_changed and about_betanyc answer in plain text (plus structuredContent),
+// not JSON, and never fetch, so print their text as it is.
+if (result.structuredContent) {
+  console.log(text);
+  process.exit(0);
+}
+
 // The server already returns compact JSON. It is parsed here only so fetched_at
 // can be corrected below, then printed compact again.
 const payload = JSON.parse(text);

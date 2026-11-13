@@ -42,8 +42,25 @@ import {
   stationById,
   stationName,
   todayIso,
+  VERSION,
 } from "./mta.js";
 import { type SnapshotName, snapshotFooter, stationListHint } from "./freshness.js";
+import { createBetanycTools } from "./betanyc-tools.js";
+
+/**
+ * whats_changed and about_betanyc, the two tools BetaNYC is adding to each of its MCP servers
+ * (betanyc-ai-workspace platform/system/whats-changed-standard.md § 7). betanyc-tools.ts is
+ * a copy of the workspace's canonical file: never edit it here. This server is not on npm and
+ * runs from a local build, so WHATS-CHANGED.md is read from the repository root, one level
+ * above dist/. Neither tool makes a network request.
+ */
+const betanyc = createBetanycTools({
+  serverName: "mta-mcp",
+  version: VERSION,
+  repoUrl: "https://github.com/BetaNYC/mta-mcp",
+  whatsChangedPath: new URL("../WHATS-CHANGED.md", import.meta.url),
+  pageUrl: "https://betanyc.github.io/mta-mcp/whats-changed.html",
+});
 
 const EFFECTS = [
   "reduced",
@@ -168,6 +185,8 @@ export const TOOLS = [
       },
     },
   },
+  // What's changed in this server, and who built it (BetaNYC standard tools).
+  ...betanyc.tools,
 ];
 
 const ARG_SHAPES = {
@@ -1015,6 +1034,8 @@ function noMatchNote(
 // ─── Dispatch ────────────────────────────────────────────────────────────────
 
 export async function callTool(name: string, args: unknown) {
+  // The shared tools answer in plain text plus structuredContent; they never touch MTA.
+  if (betanyc.handles(name)) return betanyc.call(name, args);
   try {
     switch (name) {
       case "check_route_on_date": {

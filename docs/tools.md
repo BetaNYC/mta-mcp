@@ -21,6 +21,10 @@ ever disagree, the code is right and this page needs fixing.
 - **Nothing is fetched until a tool is called,** and a fetched feed is reused
   for 60 seconds. See [Responsible use](../README.md#responsible-use).
 
+These rules, and the provenance below, are for the four MTA tools.
+[`whats_changed` and `about_betanyc`](#whats_changed-and-about_betanyc) answer
+in plain text with `structuredContent` and never fetch.
+
 ## Provenance on every answer
 
 Every tool that reads a live feed adds these fields:
@@ -298,3 +302,31 @@ and `ada_data`. Each is described in
 **Before relying on it:** no listed outage doesn't mean a station is usable,
 the ADA status and alternate routes come from dated snapshots, and the dates
 are MTA's estimates. Read the [gaps](accessibility.md#gaps) first.
+
+## `whats_changed` and `about_betanyc`
+
+The two tools BetaNYC is adding to each of its MCP servers, with the same
+names, inputs, and output in each. They come from `src/betanyc-tools.ts`, a copy of the
+BetaNYC workspace's `scripts/mcp_shared/betanyc-tools.ts`; change it there,
+never here. Neither makes a request.
+
+`whats_changed` reads [WHATS-CHANGED.md](../WHATS-CHANGED.md) from the
+repository root and returns its entries, newest first. Parameters, all
+optional: `since` (`YYYY-MM-DD`; also keeps an older entry with an update on
+or after that date), `tag` (`Site`, `Data`, `MCP` or `Correction`, any case),
+and `limit` (1 to 50, default 10). An entry waiting for its release date
+(`## Unreleased:`) is left out, and `note` says so. Each entry has `date`,
+`title`, `url`, `tags`, `summary`, `if_you_used_the_old_numbers`,
+`who_it_affects`, `mcp_version`, `more_detail`, `updates`, and `links`.
+
+`about_betanyc` takes no parameters. It returns the server's name, version,
+repository and shared-module version, who built it, BetaNYC's links, and
+where to report a bug or ask for a feature.
+
+Both answer in plain text plus `structuredContent` that matches the
+`outputSchema` they declare, and an unknown parameter is an error, as for the
+other four.
+
+---
+
+[mta-mcp home](https://betanyc.github.io/mta-mcp/) · [What's changed](https://betanyc.github.io/mta-mcp/whats-changed.html) · [Code on GitHub](https://github.com/BetaNYC/mta-mcp)
