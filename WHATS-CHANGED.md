@@ -7,12 +7,12 @@ This page lists the changes to mta-mcp that a reader would notice: new tools, ne
 
 mta-mcp is not published to npm. You run it from your own copy of the repository, so a change reaches you when you update that copy and rebuild it. To report a bug in this server or ask for a new feature, [open an issue on GitHub](https://github.com/BetaNYC/mta-mcp/issues).
 
-## Unreleased: A What's changed page, and two tools that explain the server
+## 2026-11-12: A What's changed page, and two tools that explain the server
 
 - **Tags:** Site, MCP
 - **What changed:** The website has a new page that lists every change a reader would notice. Two new tools let your AI assistant answer "what's new in this server?" and "who built this?" with links to BetaNYC and to the place to report a bug in this server or ask for a new feature. Version 0.2.0 is the first new version number since 0.1.0, so it also carries the September and October changes listed below.
-- **MCP version:** [mta-mcp 0.2.0](CHANGELOG.md)
-- **More detail:** [What's changed on the website](https://betanyc.github.io/mta-mcp/whats-changed.html) · [Release notes](CHANGELOG.md)
+- **MCP version:** [mta-mcp 0.2.0](CHANGELOG.md#020--2026-11-12)
+- **More detail:** [What's changed on the website](https://betanyc.github.io/mta-mcp/whats-changed.html) · [Release notes](CHANGELOG.md#020--2026-11-12)
 
 ## 2026-10-12: Answers warn when the station and elevator data are old
 

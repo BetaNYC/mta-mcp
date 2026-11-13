@@ -9,7 +9,7 @@ This package is not published to npm. Version numbers track the local build. See
 
 ## [Unreleased]
 
-## [0.2.0] — Unreleased
+## [0.2.0] — 2026-11-12
 
 The first version number since 0.1.0. Everything below reached the main branch between
 2026-09-23 and 2026-10-12 while `package.json` still said 0.1.0, because this server is
