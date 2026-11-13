@@ -95,6 +95,48 @@ We don't encourage or prohibit AI coding tools. This project was largely written
 
 If you used a generative tool for any part of a contribution, say so in the pull request. Generated code gets extra review. The most common mistake we've seen in this codebase is picking the field with the obvious name: `affected_stations` is well-named, parses cleanly, and gives the wrong answer. Check your change against the live feed before you submit.
 
+## Releases
+
+This server is never published, so there is no release workflow and no
+`npm publish`. People run whatever is on `main` (`git pull`, then
+`npm install`), so a change reaches them the day it merges. That day is the
+release date.
+
+A pull request that changes what the server returns, or which tools it has:
+
+1. Bumps the version in `package.json`, both `version` fields in
+   `package-lock.json`, and the "Alpha, vX.Y.Z" notices at the top of the
+   README and of `docs/index.html`.
+2. Adds a `CHANGELOG.md` section headed `## [X.Y.Z] — Unreleased`.
+3. Adds a `WHATS-CHANGED.md` entry headed `## Unreleased: Title`, in plain
+   words, tagged `MCP`, with `- **MCP version:** [mta-mcp X.Y.Z](CHANGELOG.md)`
+   (no anchor yet). A fix for a wrong answer is also tagged `Correction` and
+   says what to re-check under "If you used the old numbers". Rebuild the page:
+
+   ```bash
+   python3 scripts/whats_changed.py render WHATS-CHANGED.md --format fragment \
+     --into docs/whats-changed.html --repo-url https://github.com/BetaNYC/mta-mcp
+   ```
+
+On the day it merges, the last commit on the branch dates it:
+
+1. `## Unreleased: Title` becomes `## YYYY-MM-DD: Title`, same title, with the
+   New York date (`TZ=America/New_York date +%F`).
+2. The `CHANGELOG.md` heading gets the same date: `## [X.Y.Z] — YYYY-MM-DD`.
+3. The entry's MCP version link gains that heading's anchor. Compute it, never
+   write it by hand:
+   `python3 -c "import sys; sys.path.insert(0,'scripts'); import whats_changed as w; print(w.github_slug('[X.Y.Z] — YYYY-MM-DD'))"`
+4. Rebuild `docs/whats-changed.html` with the command above.
+5. Run `python3 scripts/whats_changed.py check WHATS-CHANGED.md --release`. It
+   fails while an `Unreleased` entry is left. No workflow runs it for you,
+   because there is no publish step.
+
+Merge, then tag the merge commit `vX.Y.Z` and push the tag. If the merge slips
+to another day, date it again. Never rewrite an older entry in
+`WHATS-CHANGED.md`; add a dated `- **Update YYYY-MM-DD:**` line to it. CI
+enforces this. `scripts/whats_changed.py` and `src/betanyc-tools.ts` are
+copies of files in the BetaNYC workspace; never edit them here.
+
 ## License
 
 This project is licensed under the [MIT License](LICENSE). By submitting a pull request, you agree that your contribution is licensed under the same terms.
