@@ -9,6 +9,57 @@ This package is not published to npm. Version numbers track the local build. See
 
 ## [Unreleased]
 
+## [0.3.0] — Unreleased
+
+Adds `about_data`, the third tool BetaNYC is adding to each of its MCP servers, and keeps
+BetaNYC's reading of each service alert apart from MTA's fields. **The alert output changes
+shape** (see Changed). Tracking: BetaNYC/betanyc-ai-workspace#1655 (epic #1652).
+
+### Added
+
+- `about_data`: where each kind of data comes from, whether it is MTA's record or changed by
+  BetaNYC, how current it is on this copy, its terms and credit line, where to check a figure
+  and where to report an error, with BetaNYC's contact address for data questions
+  (lab@beta.nyc). Optional `topic`: a source id or a tool name. No request to MTA.
+- `DATA-SOURCES.json`, the five sources (two live MTA feeds, three snapshots in `data/`),
+  every fact checked against MTA's and data.ny.gov's own pages. The snapshots' freshness is
+  the pull time already in each file, the same date the tools give in `snapshot_as_of`.
+- `data.json`, a DCAT-US 3.0 catalog built from `DATA-SOURCES.json` by
+  `scripts/whats_changed.py about-data catalog`. Never edit it by hand.
+- The server now sends MCP `instructions` saying when to call `about_data`, `about_betanyc`
+  and `whats_changed`.
+- `scripts/tests/catalog_validate.py`, `scripts/mcp_shared/data-sources.schema.json` and
+  `scripts/mcp_shared/vendor/dcat-us-3.0.0/`, copied unchanged from the BetaNYC workspace.
+- CI: an `about-data` job checks that every tool has a source, that `data.json` is current,
+  and validates both files against their JSON Schemas (pinned validators, CI only). The
+  "What's changed on main is dated" job also runs `about-data check --release`.
+- Tests: `test/about-data.test.mjs`; the tool-list tests now expect seven tools.
+
+### Changed
+
+- **Output change, `check_route_on_date` and `get_service_alerts`:** each alert's
+  `effect`, `counts_as_disruption`, `planned` and `alert_type_recognized`, and in
+  `check_route_on_date` its `affects_this_station`, `relevant_to_station` and
+  `station_level_detail`, moved into a new `betanyc` object on the alert. They are BetaNYC's
+  reading of MTA's alert, not MTA's data; MTA's fields stay at the top level with MTA's values.
+  MTA's terms (term 5) say an app must not modify the data, and the old layout put BetaNYC's
+  fields beside MTA's unmarked. Top-level answer fields (`disrupted`, `disrupting_alert_count`,
+  the response's `station_level_detail`, `unknown_alert_types`) are unchanged. A client that read
+  `alert.effect` now reads `alert.betanyc.effect`. Tool descriptions, README, `docs/tools.md`,
+  `docs/index.html` and the skill updated.
+- **Output change, `get_accessibility_outages` and `check_route_on_date`'s
+  `accessibility_outages`:** the same rule for elevator and escalator outage rows. Each row's
+  `matched_by`, `match_note` and `inventory` (in `check_route_on_date`'s short rows:
+  `matched_by`, `match_note`, `alternative_route` and `date_caveat`) moved into a `betanyc`
+  object on the row, left out when empty. MTA's row fields stay at the top level with MTA's
+  values. A client that read `row.inventory.alternative_route` now reads
+  `row.betanyc.inventory.alternative_route` (`row.betanyc.alternative_route` in a route check).
+  The answer-level `matched_by` that explains how rows were placed stays where it was.
+  `docs/accessibility.md` updated too.
+- `docs/terms-compliance.md`: a fourth obligation, "Not modifying the data" (term 5).
+- `src/betanyc-tools.ts` and `scripts/whats_changed.py` updated to shared module 1.3.7
+  (from 1.2.4), copied unchanged.
+
 ## [0.2.0] — 2026-11-12
 
 The first version number since 0.1.0. Everything below reached the main branch between

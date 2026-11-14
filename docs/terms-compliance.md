@@ -59,7 +59,7 @@ second is a written answer from MTA, which we'd ask for through the
   `platform/system/engineering-standards.md`, does not apply to this repo.
 - Installation is build-from-source only, and the README explains why.
 
-## Three more obligations, however this is run
+## Four more obligations, however this is run
 
 **1. No accuracy claim** (term 3): "You will not state or imply that the data is
 accurate, complete, or timely." Every tool result has a `disclaimer` field
@@ -80,6 +80,21 @@ That includes the route bullets, like the circled 6 or the 4 and 5 roundels. Thi
 repo writes "the 6 train" in prose and never reproduces a bullet. MTA's own
 `header_text`, which writes the route as ASCII `[6]`, is their text and fine to
 quote.
+
+**4. Not modifying the data** (term 5): "You will not modify or delete any of
+the data. You may, however, create an app that uses some but not all of the
+data." Each answer uses part of the feed: the alerts or outages for the route,
+date or station asked about, and the English version of MTA's text where MTA
+gives one. MTA's fields keep MTA's values. What BetaNYC works out from them is
+kept apart: in each service alert, BetaNYC's reading (its effect, whether it
+counts as a disruption, whether it is planned work, whether the status is one
+this server knows, and whether it bears on your station) is in a separate
+`betanyc` object. Each elevator or escalator outage row works the same way:
+MTA's row as published, with BetaNYC's additions (how the row was placed at a
+station, a note when the evidence is mixed, and the details from MTA's
+equipment inventory) in its own `betanyc` object. Answers such as `disrupted`
+are BetaNYC's, not MTA's.
+`about_data` says the same for each source.
 
 MTA can also change these terms or shut off the feeds at any time, without
 notice. If you use this for event-day travel, keep a manual fallback.

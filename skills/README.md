@@ -8,7 +8,7 @@ answer.
 
 ## `mta-subway`
 
-The same six tools as the MCP server, as a command-line script:
+The same seven tools as the MCP server, as a command-line script:
 
 ```bash
 node skills/mta-subway/scripts/mta.mjs check_route_on_date '{"route_id":"6","date":"2026-09-26","station":"68 St-Hunter College"}'
@@ -29,7 +29,7 @@ process.
 |---|---|---|
 | Works in chat apps like Claude Desktop | Yes | No. The agent must be able to run commands |
 | Works in other AI tools that support MCP | Yes | Mostly Claude only |
-| Always-on cost per conversation | About 1,000 tokens for the four MTA tools' descriptions; the two BetaNYC tools make the list about 1.8 times as long | A one-line description. The full instructions load only when used |
+| Always-on cost per conversation | About 1,000 tokens for the four MTA tools' descriptions; the three BetaNYC tools make the list about 2.8 times as long | A one-line description. The full instructions load only when used |
 | Size of a typical answer | Compact JSON, often under 2,000 tokens | The same |
 | Spacing out requests to MTA | Enforced across every call | Enforced within a run. The disk cache covers repeat questions, but two runs at the same moment could both fetch |
 

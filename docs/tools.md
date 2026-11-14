@@ -22,7 +22,7 @@ ever disagree, the code is right and this page needs fixing.
   for 60 seconds. See [Responsible use](../README.md#responsible-use).
 
 These rules, and the provenance below, are for the four MTA tools.
-[`whats_changed` and `about_betanyc`](#whats_changed-and-about_betanyc) answer
+[`whats_changed`, `about_betanyc` and `about_data`](#whats_changed-about_betanyc-and-about_data) answer
 in plain text with `structuredContent` and never fetch.
 
 ## Provenance on every answer
@@ -69,22 +69,32 @@ and the refresh command. See
 ## The alert fields
 
 `check_route_on_date` and `get_service_alerts` describe each alert with these
-fields:
+fields. The top-level fields are MTA's, with MTA's values. What BetaNYC works
+out from them is in the alert's `betanyc` object, so the two are never mixed
+up: MTA's terms say an app must not modify the data (see
+[terms-compliance.md](terms-compliance.md#four-more-obligations-however-this-is-run)). Before
+0.3.0 the `betanyc` fields sat beside MTA's.
 
 | Field | Meaning |
 |---|---|
 | `entity_id` | MTA's id for the alert. `lmm:planned_work:…` is scheduled work, `lmm:alert:…` is a live incident. Include it in bug reports |
 | `alert_type` | MTA's status, like `"Planned - Part Suspended"` |
-| `alert_type_recognized` | `false` if this server doesn't know that status yet |
-| `effect` | What the status means for riders. See [Effects](#effects) |
-| `counts_as_disruption` | Whether this alert makes the route "disrupted" |
-| `planned` | `true` if the id starts `lmm:planned_work:`. That's an observed pattern, not something MTA documents |
 | `routes` | Every route the alert names |
-| `header_text` | MTA's headline, in English. Routes appear as `[6]` |
-| `description_text` | MTA's longer text, in English, or `null` |
+| `header_text` | MTA's headline, in the English version where MTA gives one (otherwise MTA's first version). Routes appear as `[6]` |
+| `description_text` | MTA's longer text, chosen the same way, or `null` |
 | `human_readable_active_period` | MTA's own wording for when it applies, like `"Sep 18 - Oct 19, Fri 9:30 PM to Mon 5:00 AM"`. Use this in anything a person reads |
 | `affected_stops` | Stations MTA tagged, as `{stop_id, stop_name}`, from `informed_entity`. When you asked about one route, only that route's stops. Empty if MTA tagged none |
 | `active_periods` | MTA's raw periods, as `{start, end}` in epoch seconds. A missing `start` or `end` means open-ended |
+| `betanyc` | BetaNYC's reading of the alert, not MTA's data. The fields below |
+
+In `betanyc`:
+
+| Field | Meaning |
+|---|---|
+| `effect` | What the status means for riders, from BetaNYC's table. See [Effects](#effects) |
+| `counts_as_disruption` | Whether this alert makes the route "disrupted" |
+| `planned` | `true` if the id starts `lmm:planned_work:`. That's an observed pattern, not something MTA documents |
+| `alert_type_recognized` | `false` if this server doesn't know that status yet |
 
 An alert is active on a date if any of its periods overlaps that day in New
 York time. An alert with no periods at all is active on every date. The
@@ -160,7 +170,7 @@ Is a route disrupted on a date, optionally at one station?
 | `accessibility_note` | With a station, what `station.accessibility` means and doesn't. Otherwise `null` |
 | `accessibility_outages` | With `include_accessibility: true`, the station's elevator and escalator outages that day, with MTA's alternate routes. Otherwise `null`. Fields in [docs/accessibility.md](accessibility.md#elevators-in-check_route_on_date) |
 
-Extra fields on each alert:
+Extra fields in each alert's `betanyc` object:
 
 | Field | Meaning |
 |---|---|
@@ -288,11 +298,14 @@ in [docs/accessibility.md](accessibility.md).
 accepted with `date`. A date query reads the current feed alone, which relies on
 that feed containing every scheduled outage; MTA doesn't document that.
 
-Each outage row is MTA's row plus, where they apply, `matched_by`
-(`"equipment id"`, `"name"`, or `"partial name"`), `match_note`, and
-`inventory` (`stop_ids`, `ada_compliant`, `redundant_elevator`,
-`alternative_route`). Fields with nothing to say are left out, and
-`inventory` comes only with `station` or `stop_id`. Alongside the rows,
+Each outage row is MTA's row, with MTA's fields and values, plus a `betanyc`
+object holding, where they apply, `matched_by` (`"equipment id"`, `"name"`,
+or `"partial name"`), `match_note`, and `inventory` (`stop_ids`,
+`ada_compliant`, `redundant_elevator`, `alternative_route`). These are
+BetaNYC's additions, kept apart from MTA's fields as on the alerts; before
+0.3.0 they sat beside them. Fields with nothing to say are left out, as is
+`betanyc` when it would be empty. `inventory` comes only with `station` or
+`stop_id`. Alongside the rows,
 the answer has `date`, `route_id`, `route_tokens_matched`, `route_note`,
 `station_accessibility`, `rows_without_station`, `no_match_note`,
 `date_caveats`, `complex_outages`, `other_station_outages`, `inventory_data`,
@@ -303,12 +316,12 @@ and `ada_data`. Each is described in
 the ADA status and alternate routes come from dated snapshots, and the dates
 are MTA's estimates. Read the [gaps](accessibility.md#gaps) first.
 
-## `whats_changed` and `about_betanyc`
+## `whats_changed`, `about_betanyc` and `about_data`
 
-The two tools BetaNYC is adding to each of its MCP servers, with the same
+The three tools BetaNYC is adding to each of its MCP servers, with the same
 names, inputs, and output in each. They come from `src/betanyc-tools.ts`, a copy of the
 BetaNYC workspace's `scripts/mcp_shared/betanyc-tools.ts`; change it there,
-never here. Neither makes a request.
+never here. None makes a request.
 
 `whats_changed` reads [WHATS-CHANGED.md](../WHATS-CHANGED.md) from the
 repository root and returns its entries, newest first. Parameters, all
@@ -323,7 +336,21 @@ and `limit` (1 to 50, default 10). An entry waiting for its release date
 repository and shared-module version, who built it, BetaNYC's links, and
 where to report a bug or ask for a feature.
 
-Both answer in plain text plus `structuredContent` that matches the
+`about_data` reads [DATA-SOURCES.json](../DATA-SOURCES.json) from the
+repository root and says, for each kind of data, what it is, who publishes it,
+whether it is MTA's record or changed by BetaNYC (`official`,
+`figures_official`, `changed_by_betanyc`), how it reaches the server, how
+current it is on this copy (`as_of`, `as_of_status`), coverage and known
+gaps, terms and credit line, where to check a figure, where to report an
+error, the tools that use it, caveats, and corrections. One optional
+parameter, `topic`: `service-alerts`, `elevator-outages`, `stations`,
+`station-accessibility`, `elevator-inventory`, a tool name (the sources behind
+that tool), or `all`. The two MTA feeds report `as_of_status: "live"`; the
+three snapshots report the same pull times as `snapshot_as_of`. The answer
+also gives `contact_email`, lab@beta.nyc, for questions or error reports
+about the data.
+
+All three answer in plain text plus `structuredContent` that matches the
 `outputSchema` they declare, and an unknown parameter is an error, as for the
 other four.
 

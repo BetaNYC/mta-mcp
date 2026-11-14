@@ -5,13 +5,14 @@ import {
   CallToolRequestSchema,
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
-import { TOOLS, callTool } from "./tools.js";
+import { TOOLS, betanyc, callTool } from "./tools.js";
 import { VERSION } from "./mta.js";
 import { startupNotice } from "./freshness.js";
 
 const server = new Server(
   { name: "mta-mcp", version: VERSION },
-  { capabilities: { tools: {} } }
+  // betanyc.instructions: when to call about_data, about_betanyc and whats_changed.
+  { capabilities: { tools: {} }, instructions: betanyc.instructions }
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => ({ tools: TOOLS }));
