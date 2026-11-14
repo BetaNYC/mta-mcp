@@ -89,7 +89,11 @@ gives one. MTA's fields keep MTA's values. What BetaNYC works out from them is
 kept apart: in each service alert, BetaNYC's reading (its effect, whether it
 counts as a disruption, whether it is planned work, whether the status is one
 this server knows, and whether it bears on your station) is in a separate
-`betanyc` object, and answers such as `disrupted` are BetaNYC's, not MTA's.
+`betanyc` object. Each elevator or escalator outage row works the same way:
+MTA's row as published, with BetaNYC's additions (how the row was placed at a
+station, a note when the evidence is mixed, and the details from MTA's
+equipment inventory) in its own `betanyc` object. Answers such as `disrupted`
+are BetaNYC's, not MTA's.
 `about_data` says the same for each source.
 
 MTA can also change these terms or shut off the feeds at any time, without

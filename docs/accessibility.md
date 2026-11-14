@@ -128,12 +128,14 @@ an empty list.
       "reason": "...",
       "isupcomingoutage": "N",
       "ismaintenanceoutage": "N",
-      "matched_by": "name",
-      "inventory": {
-        "stop_ids": ["A27"],
-        "ada_compliant": "YES",
-        "redundant_elevator": "+",
-        "alternative_route": "..."
+      "betanyc": {
+        "matched_by": "name",
+        "inventory": {
+          "stop_ids": ["A27"],
+          "ada_compliant": "YES",
+          "redundant_elevator": "+",
+          "alternative_route": "..."
+        }
       }
     }
   ],
@@ -173,12 +175,17 @@ an empty list.
 | `inventory_data` | When the equipment inventory snapshot was pulled, its source, and a note that its text can lag |
 | `ada_data` | With `stop_id`, the same for the station ADA snapshot. Otherwise `null` |
 
-Each outage row can carry three fields after MTA's. A field with nothing to
-say is left out, not set to `null`. `inventory` comes only when you filter by
+Each outage row is MTA's row, with MTA's fields and values, plus a `betanyc`
+object holding up to three fields BetaNYC adds. They are kept apart from MTA's
+fields because they are BetaNYC's work, not MTA's data (see
+[terms-compliance.md](terms-compliance.md#four-more-obligations-however-this-is-run));
+before 0.3.0 they sat beside MTA's. A field with nothing to say is left out,
+not set to `null`, and `betanyc` is left out when it would be empty.
+`inventory` comes only when you filter by
 `station` or `stop_id`, which keeps the unfiltered and route-only answers
 small: on the saved feed, the unfiltered answer is about 29,000 characters.
 
-| Field | Meaning |
+| Field in `betanyc` | Meaning |
 |---|---|
 | `matched_by` | `"equipment id"`, `"name"`, or `"partial name"`: how this row was tied to your station. Absent when you didn't filter by station, or for a row with no station name |
 | `match_note` | Why a row is here when the evidence is mixed: the inventory places it at another station in the complex, or a closer name belongs to another station. Otherwise absent |
@@ -262,7 +269,7 @@ asked about by `stop_id`. See below.
 Each row lands in one of four places:
 
 1. **The inventory places it at your station.** It goes in `outages` with
-   `matched_by: "equipment id"`.
+   `betanyc.matched_by: "equipment id"`.
 2. **The inventory places it at another station in the same complex.** If the
    row's name also fits your station, it stays in `outages`, matched by name,
    with a `match_note` saying where the inventory puts it. Several stations in
@@ -297,7 +304,7 @@ the answers: 13 name-only pairings that were wrong now go to
 `other_station_outages`, and 3 rows name matching missed are now found.
 
 A `station` search doesn't use the inventory to filter, since it doesn't know
-which station you mean. Each row's `inventory.stop_ids` still tells you where
+which station you mean. Each row's `betanyc.inventory.stop_ids` still tells you where
 MTA says the equipment is, which is the quickest way to sort out a name like
 `125 St`.
 
@@ -344,7 +351,7 @@ gives the pull date.
 MTA's equipment inventory has an `alternative_route` for 427 of its 481
 elevators, and for none of the escalators. It's MTA's own text, telling a
 rider how to get around that elevator when it's out. The tool returns it in
-each outage row's `inventory`, unchanged. `redundant_elevator` is `"+"` when
+each outage row's `betanyc.inventory`, unchanged. `redundant_elevator` is `"+"` when
 MTA says another elevator provides the same service and `"-"` when none does.
 
 Two warnings, both from MTA:
@@ -377,7 +384,7 @@ made.
 |---|---|
 | `feed_url`, `fetched_at` | The elevator feed read, and when |
 | `outage_count` | Outages at this station that day |
-| `outages` | A short form of each row: `equipment`, `equipmenttype`, `serving`, `ADA`, `outagedate`, `estimatedreturntoservice`, `reason`, `matched_by`, `match_note`, `alternative_route`, and `date_caveat` |
+| `outages` | A short form of each row: MTA's `equipment`, `equipmenttype`, `serving`, `ADA`, `outagedate`, `estimatedreturntoservice` and `reason`, and a `betanyc` object with whichever of `matched_by`, `match_note`, `alternative_route` (from MTA's inventory) and `date_caveat` apply |
 | `complex_outages` | The same, for other stations in the complex. `null` if the station isn't in one |
 | `other_station_outage_count` | Rows that matched the name but belong to another station. `get_accessibility_outages` lists them |
 | `note` | What this covers, what an empty list does and doesn't mean, and where to confirm |
@@ -483,7 +490,7 @@ search.
 
 A search by `station` doesn't know which routes you mean. `"125 St"` can
 return an outage at any of four stations. Use `stop_id`, or check each row's
-`inventory.stop_ids` and `trainno`.
+`betanyc.inventory.stop_ids` and `trainno`.
 
 ### 6. The dates are MTA's estimates
 
@@ -499,7 +506,8 @@ won't show. For a date more than a few days out, check again closer to it.
    direction, in MTA's words from `mta_notes`. If it's `not_accessible`,
    don't describe the station as accessible, whatever the outages say.
 3. For each outage, note whether `ADA` is `"Y"`, what it's `serving`, and the
-   `alternative_route`. Read any `match_note` and `date_caveat`, and look at
+   `betanyc.alternative_route`. Read any `betanyc.match_note` and
+   `betanyc.date_caveat`, and look at
    `complex_outages`.
 4. For the full detail, run `get_accessibility_outages` with the same
    `stop_id` and `date`, and check `other_station_outages`.

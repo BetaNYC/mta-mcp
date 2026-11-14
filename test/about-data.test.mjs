@@ -116,3 +116,9 @@ test("the MTA credit line says BetaNYC is not the MTA and makes no accuracy clai
     );
   }
 });
+
+test("elevator outages: BetaNYC's additions are named as such and kept in a betanyc object", async () => {
+  const s = one((await ask({ topic: "elevator-outages" })).structuredContent, "elevator-outages");
+  assert.match(s.changed_by_betanyc.detail, /^BetaNYC does not alter MTA's values\./);
+  assert.match(s.changed_by_betanyc.detail, /separate betanyc object on each row/);
+});

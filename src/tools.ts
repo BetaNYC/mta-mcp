@@ -167,7 +167,7 @@ export const TOOLS = [
   {
     name: "get_accessibility_outages",
     description:
-      "Elevator and escalator outages in the subway: in effect now, scheduled, or overlapping one date, with MTA's alternate route for each elevator. With stop_id, rows are placed by equipment ID using MTA's equipment inventory, with name matching as a fallback; each row's matched_by says which. Zero matches is not proof of no outage, and no outage is not proof a station is usable; read no_match_note and station_accessibility. Equipment locations, alternate routes, and ADA status come from local snapshots the user must refresh; snapshot_as_of gives their dates and snapshot_warning flags old ones.",
+      "Elevator and escalator outages in the subway: in effect now, scheduled, or overlapping one date, with MTA's alternate route for each elevator. With stop_id, rows are placed by equipment ID using MTA's equipment inventory, with name matching as a fallback. Each row's own fields are MTA's; what BetaNYC adds (matched_by, which says how the row was placed, match_note, and the inventory's details for that equipment) is in its `betanyc` object. Zero matches is not proof of no outage, and no outage is not proof a station is usable; read no_match_note and station_accessibility. Equipment locations, alternate routes, and ADA status come from local snapshots the user must refresh; snapshot_as_of gives their dates and snapshot_warning flags old ones.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -590,14 +590,18 @@ type InventoryInfo = {
   alternative_route: string | null;
 };
 
-// Our fields are omitted, not null, when they have nothing to say, and
+// MTA's row keeps MTA's fields and values. What BetaNYC adds goes in `betanyc`,
+// apart from them (MTA's terms, term 5; see docs/terms-compliance.md), the same
+// way as on service alerts. Our fields are omitted, not null, when they have
+// nothing to say, and `betanyc` itself is omitted when it would be empty.
 // `inventory` comes only with a station filter. A route-wide or unfiltered
 // answer is the big one, and it has no station to route around anyway.
-export type ShapedOutage = EneOutage & {
+export type OutageAdditions = {
   matched_by?: MatchedBy;
   match_note?: string;
   inventory?: InventoryInfo;
 };
+export type ShapedOutage = EneOutage & { betanyc?: OutageAdditions };
 
 /** What the inventory adds to an outage row, or null if it has no such code. */
 function inventoryInfo(row: EneOutage): InventoryInfo | null {
@@ -611,19 +615,19 @@ function inventoryInfo(row: EneOutage): InventoryInfo | null {
   };
 }
 
-/** MTA's row unchanged, plus whichever of our three fields apply. */
+/** MTA's row unchanged, plus whichever of our three fields apply, in `betanyc`. */
 function shapeOutage(
   row: EneOutage,
   matchedBy: MatchedBy | null,
   note: string | null = null,
   withInventory = true
 ): ShapedOutage {
-  const out: ShapedOutage = { ...row };
-  if (matchedBy) out.matched_by = matchedBy;
-  if (note) out.match_note = note;
+  const ours: OutageAdditions = {};
+  if (matchedBy) ours.matched_by = matchedBy;
+  if (note) ours.match_note = note;
   const inventory = withInventory ? inventoryInfo(row) : null;
-  if (inventory) out.inventory = inventory;
-  return out;
+  if (inventory) ours.inventory = inventory;
+  return Object.keys(ours).length > 0 ? { ...row, betanyc: ours } : { ...row };
 }
 
 const describeStops = (ids: string[]): string =>
@@ -737,7 +741,7 @@ function placeAtStation(rows: EneOutage[], station: Station): Placement {
 
   here.sort(
     (a, b) =>
-      (MATCH_RANK[a.row.matched_by ?? ""] ?? 3) - (MATCH_RANK[b.row.matched_by ?? ""] ?? 3) ||
+      (MATCH_RANK[a.row.betanyc?.matched_by ?? ""] ?? 3) - (MATCH_RANK[b.row.betanyc?.matched_by ?? ""] ?? 3) ||
       b.score - a.score
   );
   return { outages: here.map((h) => h.row), complex, other, withoutStation };
@@ -946,10 +950,13 @@ function compactOutage(row: ShapedOutage, caveat: EneDateCaveat | undefined) {
     estimatedreturntoservice: row.estimatedreturntoservice ?? null,
     reason: row.reason ?? null,
   };
-  if (row.matched_by) out.matched_by = row.matched_by;
-  if (row.match_note) out.match_note = row.match_note;
-  if (row.inventory?.alternative_route) out.alternative_route = row.inventory.alternative_route;
-  if (caveat) out.date_caveat = caveat;
+  // BetaNYC's additions, apart from MTA's fields, as in the full rows.
+  const ours: Record<string, unknown> = {};
+  if (row.betanyc?.matched_by) ours.matched_by = row.betanyc.matched_by;
+  if (row.betanyc?.match_note) ours.match_note = row.betanyc.match_note;
+  if (row.betanyc?.inventory?.alternative_route) ours.alternative_route = row.betanyc.inventory.alternative_route;
+  if (caveat) ours.date_caveat = caveat;
+  if (Object.keys(ours).length > 0) out.betanyc = ours;
   return out;
 }
 

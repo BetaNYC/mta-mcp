@@ -588,9 +588,10 @@ test("include_accessibility adds the station's outages that day, for one extra r
     const acc = result.accessibility_outages;
     assert.equal(acc.feed_url, ENE_CURRENT_URL);
     assert.deepEqual(acc.outages.map((o) => o.equipment).sort(), ["EL431", "EL432", "EL433"]);
-    assert.ok(acc.outages.every((o) => o.matched_by === "equipment id"));
+    assert.ok(acc.outages.every((o) => o.betanyc.matched_by === "equipment id"));
     const el433 = acc.outages.find((o) => o.equipment === "EL433");
-    assert.match(el433.alternative_route, /Kew Gardens-Union Tpke/);
+    assert.match(el433.betanyc.alternative_route, /Kew Gardens-Union Tpke/);
+    assert.equal("alternative_route" in el433, false, "the inventory's alternate route is not beside MTA's outage fields");
     assert.match(acc.note, /can lag/);
     assert.match(acc.note, /mta\.info\/elevator-escalator-status/);
     assert.equal(acc.complex_outages, null, "F01 is not part of a complex");
@@ -651,9 +652,9 @@ test("with a stop_id, outage rows are placed by equipment ID and carry the inven
   assert.equal(f01.station_accessibility.status, "fully_accessible");
   assert.ok(f01.outages.length > 0);
   for (const o of f01.outages) {
-    assert.equal(o.matched_by, "equipment id");
-    assert.deepEqual(o.inventory.stop_ids, ["F01"]);
-    assert.equal(o.inventory.ada_compliant, "YES");
+    assert.equal(o.betanyc.matched_by, "equipment id");
+    assert.deepEqual(o.betanyc.inventory.stop_ids, ["F01"]);
+    assert.equal(o.betanyc.inventory.ada_compliant, "YES");
   }
   assert.match(f01.inventory_data.source_url, /94fv-bak7/);
   assert.match(f01.inventory_data.note, /can lag/);
@@ -666,25 +667,25 @@ test("the ID join drops name-only false positives and finds what names missed", 
   const unionSt = await call("get_accessibility_outages", { stop_id: "R32" });
   assert.equal(unionSt.outage_count, 0);
   assert.deepEqual(unionSt.other_station_outages.map((o) => o.station), ["14 St-Union Sq", "14 St-Union Sq"]);
-  assert.ok(unionSt.other_station_outages.every((o) => /places .* at 14 St-Union Sq/.test(o.match_note)));
+  assert.ok(unionSt.other_station_outages.every((o) => /places .* at 14 St-Union Sq/.test(o.betanyc.match_note)));
   assert.match(unionSt.no_match_note, /not proof the station is usable/);
   assert.match(unionSt.no_match_note, /not accessible/);
 
   // "168 St" in the feed was only ever found from A09. EL113 is coded to 112.
   const s112 = await call("get_accessibility_outages", { stop_id: "112" });
-  assert.deepEqual(s112.outages.map((o) => [o.equipment, o.matched_by]), [["EL113", "equipment id"]]);
+  assert.deepEqual(s112.outages.map((o) => [o.equipment, o.betanyc.matched_by]), [["EL113", "equipment id"]]);
   // A09 still lists it, because the feed names it, with where the inventory puts it.
   const a09 = await call("get_accessibility_outages", { stop_id: "A09" });
   const el113 = a09.outages.find((o) => o.equipment === "EL113");
-  assert.equal(el113.matched_by, "name");
-  assert.match(el113.match_note, /168 St-Washington Hts \(112\), another station in this complex/);
+  assert.equal(el113.betanyc.matched_by, "name");
+  assert.match(el113.betanyc.match_note, /168 St-Washington Hts \(112\), another station in this complex/);
 });
 
 test("outages elsewhere in a complex are listed apart, not dropped", async () => {
   // EL290X is "42St/Port Authority" in the feed and A27 in the inventory, in
   // the same complex as Times Sq-42 St (127).
   const times = await call("get_accessibility_outages", { stop_id: "127" });
-  assert.ok(times.complex_outages.some((o) => o.equipment === "EL290X" && o.matched_by === "equipment id"));
+  assert.ok(times.complex_outages.some((o) => o.equipment === "EL290X" && o.betanyc.matched_by === "equipment id"));
   assert.equal(times.outages.some((o) => o.equipment === "EL290X"), false);
   // A station outside any complex gets null, not an empty list.
   const f01 = await call("get_accessibility_outages", { stop_id: "F01" });
@@ -701,16 +702,16 @@ test("rows the inventory doesn't know fall back to names, and say so", async () 
   try {
     const wtc = await call("get_accessibility_outages", { stop_id: "138" });
     const row = wtc.outages.find((o) => o.equipment === "EL-NOT-IN-INVENTORY");
-    assert.equal(row.matched_by, "partial name");
-    assert.equal("inventory" in row, false, "no inventory entry, so the field is omitted");
-    assert.equal("match_note" in row, false, "138 is the closest name, so nothing to flag");
+    assert.equal(row.betanyc.matched_by, "partial name");
+    assert.equal("inventory" in row.betanyc, false, "no inventory entry, so the field is omitted");
+    assert.equal("match_note" in row.betanyc, false, "138 is the closest name, so nothing to flag");
 
     // Van Cortlandt Park-242 St also contains "Cortlandt" on the 1. It used to
     // lose the tie-break silently. Now it gets the row, flagged.
     const van = await call("get_accessibility_outages", { stop_id: "101" });
     const flagged = van.outages.find((o) => o.equipment === "EL-NOT-IN-INVENTORY");
-    assert.equal(flagged.matched_by, "partial name");
-    assert.match(flagged.match_note, /WTC Cortlandt \(138\).*matches 'Cortlandt St' more closely/);
+    assert.equal(flagged.betanyc.matched_by, "partial name");
+    assert.match(flagged.betanyc.match_note, /WTC Cortlandt \(138\).*matches 'Cortlandt St' more closely/);
   } finally {
     eneCurrentBody = ENE_CURRENT;
     await callTool("get_accessibility_outages", {});
@@ -721,9 +722,9 @@ test("rows the inventory doesn't know fall back to names, and say so", async () 
 
 test("a free-text station search tags rows as name matches and shows the inventory's station", async () => {
   const byName = await call("get_accessibility_outages", { station: "125 St", date: SAT });
-  assert.ok(byName.outages.every((o) => o.matched_by === "name"));
+  assert.ok(byName.outages.every((o) => o.betanyc.matched_by === "name"));
   assert.deepEqual(
-    byName.outages.map((o) => [o.equipment, o.inventory.stop_ids]).sort(),
+    byName.outages.map((o) => [o.equipment, o.betanyc.inventory.stop_ids]).sort(),
     [["EL144", ["A15"]], ["ES102", ["116"]]]
   );
   assert.equal(byName.station_accessibility, null);
@@ -749,19 +750,36 @@ test("a not-accessible station with ADA elevators isn't told it may have none", 
   assert.match(route.accessibility_outages.note, /not proof the station is usable/);
 });
 
-test("unfiltered and route-only answers carry no inventory and no null extras", async () => {
+test("unfiltered and route-only answers carry no betanyc object and no null extras", async () => {
   for (const args of [{}, { route_id: "6" }]) {
     const result = await call("get_accessibility_outages", args);
     assert.ok(result.outages.length > 0);
-    for (const o of result.outages) {
-      assert.equal("inventory" in o, false);
-      assert.equal("matched_by" in o, false);
-      assert.equal("match_note" in o, false);
-    }
+    for (const o of result.outages) assert.equal("betanyc" in o, false, "nothing BetaNYC added, so no object");
   }
   // With a station, the inventory is there.
   const byName = await call("get_accessibility_outages", { station: "Jamaica-179 St", upcoming: true });
-  assert.ok(byName.outages.every((o) => o.inventory && o.matched_by === "name"));
+  assert.ok(byName.outages.every((o) => o.betanyc.inventory && o.betanyc.matched_by === "name"));
+});
+
+test("BetaNYC's additions to an outage row sit in a `betanyc` object, apart from MTA's fields", async () => {
+  // Same rule as the alerts: MTA's row keeps MTA's fields and values; what BetaNYC adds
+  // (how the row was placed, the note, the inventory's details) is nested.
+  const OURS = ["matched_by", "match_note", "inventory", "alternative_route", "date_caveat"];
+  const byId = await call("get_accessibility_outages", { stop_id: "F01" });
+  const byName = await call("get_accessibility_outages", { station: "125 St", date: SAT });
+  const rows = [...byId.outages, ...(byId.complex_outages ?? []), ...byId.other_station_outages, ...byName.outages];
+  assert.ok(rows.length > 0);
+  for (const o of rows) {
+    for (const k of OURS) assert.equal(k in o, false, `${k} is not beside MTA's fields`);
+    assert.ok("equipment" in o, "MTA's own fields stay at the top level");
+    assert.ok(o.betanyc && ("matched_by" in o.betanyc || "match_note" in o.betanyc), o.equipment);
+  }
+  const route = await call("check_route_on_date", { route_id: "F", date: SAT, stop_id: "F01", include_accessibility: true });
+  for (const o of route.accessibility_outages.outages) {
+    for (const k of OURS) assert.equal(k in o, false, `${k} is not beside MTA's fields (check_route_on_date)`);
+    assert.ok(o.betanyc && ("matched_by" in o.betanyc || "match_note" in o.betanyc), o.equipment);
+  }
+  assert.match(TOOLS.find((t) => t.name === "get_accessibility_outages").description, /`betanyc`/);
 });
 
 // ─── Alerts with no active_period ────────────────────────────────────────────

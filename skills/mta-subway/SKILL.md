@@ -90,11 +90,12 @@ can strand someone who uses a wheelchair.
 - **No outage isn't proof the station is usable.** Never write "the elevators
   are working." Write what MTA lists, and when you checked.
 - **Use `stop_id`.** Rows are then placed by equipment ID from MTA's inventory,
-  and each row's `matched_by` says `"equipment id"`, `"name"`, or
-  `"partial name"`. Read any `match_note`. Outages elsewhere in the same
+  and each row's `betanyc.matched_by` says `"equipment id"`, `"name"`, or
+  `"partial name"`. Read any `betanyc.match_note`. Outages elsewhere in the same
   station complex are in `complex_outages`; mention them, since a rider may
   pass through.
-- **Alternate routes** are in each row's `inventory.alternative_route`, which
+- **Alternate routes** are in each row's `betanyc.inventory.alternative_route`
+  (`betanyc.alternative_route` in a route check), which
   appears only when you pass `station` or `stop_id`. Quote
   them as MTA's, word for word. MTA keeps them by hand and says they can lag,
   and some describe one past outage. Tell people to confirm on mta.info.
@@ -114,7 +115,7 @@ can strand someone who uses a wheelchair.
 - **Same name, different stations.** Use `stop_id` when you can. Rows that
   belong to a same-named station elsewhere move to `other_station_outages`.
   With a name alone, `"125 St"` can return an outage at a different 125 St,
-  so check each row's `inventory.stop_ids` and `trainno`.
+  so check each row's `betanyc.inventory.stop_ids` and `trainno`.
 - **`route_id`** filters by the row's `trainno`. `6X` counts as `6`, and every
   shuttle (`GS`, `FS`, `H`) counts as `S`, which the feed doesn't tell apart.
 - **`ADA: "Y"`** means the elevator is part of the station's accessible path,

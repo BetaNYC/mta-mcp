@@ -350,7 +350,7 @@
       "provenance": [
         "Official source: yes. This data is BetaNYC's, derived from it, not an official Metropolitan Transportation Authority record.",
         "Read-only requests to MTA's public feeds when a tool is called, with no API key. Each response is kept in memory for up to 60 seconds.",
-        "Changed by BetaNYC: BetaNYC does not alter MTA's values. Each answer uses part of the feed: the outages for the station, line or date asked about. MTA's terms allow an app to use some but not all of the data. Next to MTA's fields BetaNYC adds the station each outage is placed at, found by joining MTA's equipment number to MTA's elevator inventory (topic elevator-inventory) or, when that fails, by matching MTA's station name; how it was matched; and the inventory's details for that equipment."
+        "Changed by BetaNYC: BetaNYC does not alter MTA's values. Each answer uses part of the feed: the outages for the station, line or date asked about. MTA's terms allow an app to use some but not all of the data. In a separate betanyc object on each row, BetaNYC adds the station the outage is placed at, found by joining MTA's equipment number to MTA's elevator inventory (topic elevator-inventory) or, when that fails, by matching MTA's station name; how it was matched; a note when the evidence is mixed; and the inventory's details for that equipment, including MTA's alternate route. These are BetaNYC's additions, not MTA's data."
       ],
       "page": [
         {

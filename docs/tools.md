@@ -298,11 +298,14 @@ in [docs/accessibility.md](accessibility.md).
 accepted with `date`. A date query reads the current feed alone, which relies on
 that feed containing every scheduled outage; MTA doesn't document that.
 
-Each outage row is MTA's row plus, where they apply, `matched_by`
-(`"equipment id"`, `"name"`, or `"partial name"`), `match_note`, and
-`inventory` (`stop_ids`, `ada_compliant`, `redundant_elevator`,
-`alternative_route`). Fields with nothing to say are left out, and
-`inventory` comes only with `station` or `stop_id`. Alongside the rows,
+Each outage row is MTA's row, with MTA's fields and values, plus a `betanyc`
+object holding, where they apply, `matched_by` (`"equipment id"`, `"name"`,
+or `"partial name"`), `match_note`, and `inventory` (`stop_ids`,
+`ada_compliant`, `redundant_elevator`, `alternative_route`). These are
+BetaNYC's additions, kept apart from MTA's fields as on the alerts; before
+0.3.0 they sat beside them. Fields with nothing to say are left out, as is
+`betanyc` when it would be empty. `inventory` comes only with `station` or
+`stop_id`. Alongside the rows,
 the answer has `date`, `route_id`, `route_tokens_matched`, `route_note`,
 `station_accessibility`, `rows_without_station`, `no_match_note`,
 `date_caveats`, `complex_outages`, `other_station_outages`, `inventory_data`,

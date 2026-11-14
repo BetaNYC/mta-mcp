@@ -234,9 +234,10 @@ Elevator and escalator outages.
 { "stop_id": "A27", "date": "2026-09-26" }
 ```
 
-Returns MTA's outage rows as they are, each followed by `matched_by` (how it
-was tied to the station), `match_note`, and `inventory`, which holds MTA's
-`alternative_route` for the elevator. With `stop_id`, the answer also has the
+Returns MTA's outage rows as they are, each with a separate `betanyc` object
+holding what BetaNYC adds: `matched_by` (how it was tied to the station),
+`match_note`, and `inventory`, which holds MTA's `alternative_route` for the
+elevator from MTA's inventory. With `stop_id`, the answer also has the
 station's ADA status and a `complex_outages` list for other stations in the
 same complex. MTA's fields that matter most:
 

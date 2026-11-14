@@ -47,6 +47,15 @@ shape** (see Changed). Tracking: BetaNYC/betanyc-ai-workspace#1655 (epic #1652).
   the response's `station_level_detail`, `unknown_alert_types`) are unchanged. A client that read
   `alert.effect` now reads `alert.betanyc.effect`. Tool descriptions, README, `docs/tools.md`,
   `docs/index.html` and the skill updated.
+- **Output change, `get_accessibility_outages` and `check_route_on_date`'s
+  `accessibility_outages`:** the same rule for elevator and escalator outage rows. Each row's
+  `matched_by`, `match_note` and `inventory` (in `check_route_on_date`'s short rows:
+  `matched_by`, `match_note`, `alternative_route` and `date_caveat`) moved into a `betanyc`
+  object on the row, left out when empty. MTA's row fields stay at the top level with MTA's
+  values. A client that read `row.inventory.alternative_route` now reads
+  `row.betanyc.inventory.alternative_route` (`row.betanyc.alternative_route` in a route check).
+  The answer-level `matched_by` that explains how rows were placed stays where it was.
+  `docs/accessibility.md` updated too.
 - `docs/terms-compliance.md`: a fourth obligation, "Not modifying the data" (term 5).
 - `src/betanyc-tools.ts` and `scripts/whats_changed.py` updated to shared module 1.3.7
   (from 1.2.4), copied unchanged.
