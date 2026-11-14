@@ -44,22 +44,33 @@ import {
   todayIso,
   VERSION,
 } from "./mta.js";
-import { type SnapshotName, snapshotFooter, stationListHint } from "./freshness.js";
+import { type SnapshotName, SNAPSHOTS, snapshotFooter, stationListHint } from "./freshness.js";
 import { createBetanycTools } from "./betanyc-tools.js";
 
 /**
- * whats_changed and about_betanyc, the two tools BetaNYC is adding to each of its MCP servers
- * (betanyc-ai-workspace platform/system/whats-changed-standard.md § 7). betanyc-tools.ts is
- * a copy of the workspace's canonical file: never edit it here. This server is not on npm and
- * runs from a local build, so WHATS-CHANGED.md is read from the repository root, one level
- * above dist/. Neither tool makes a network request.
+ * whats_changed, about_betanyc and about_data, the three tools BetaNYC is adding to each of its
+ * MCP servers (betanyc-ai-workspace platform/system/whats-changed-standard.md § 7 and
+ * about-data-standard.md). betanyc-tools.ts is a copy of the workspace's canonical file: never
+ * edit it here. This server is not on npm and runs from a local build, so WHATS-CHANGED.md and
+ * DATA-SOURCES.json are read from the repository root, one level above dist/. None of the three
+ * makes a network request.
+ *
+ * about_data's freshness: the two MTA feeds are "live" (read when a tool is called). The three
+ * bundled snapshots answer with the same pull times the tools report in snapshot_as_of
+ * (src/freshness.ts), read from the files in data/ that the update scripts write.
  */
-const betanyc = createBetanycTools({
+export const betanyc = createBetanycTools({
   serverName: "mta-mcp",
   version: VERSION,
   repoUrl: "https://github.com/BetaNYC/mta-mcp",
   whatsChangedPath: new URL("../WHATS-CHANGED.md", import.meta.url),
   pageUrl: "https://betanyc.github.io/mta-mcp/whats-changed.html",
+  dataSourcesPath: new URL("../DATA-SOURCES.json", import.meta.url),
+  freshness: {
+    stations_pulled: () => SNAPSHOTS.stations.asOf() ?? null,
+    station_ada_pulled: () => SNAPSHOTS.station_ada.asOf() ?? null,
+    equipment_pulled: () => SNAPSHOTS.equipment.asOf() ?? null,
+  },
 });
 
 const EFFECTS = [
@@ -1035,6 +1046,7 @@ function noMatchNote(
 
 export async function callTool(name: string, args: unknown) {
   // The shared tools answer in plain text plus structuredContent; they never touch MTA.
+  // Every freshness hook is synchronous, so the sync call is enough.
   if (betanyc.handles(name)) return betanyc.call(name, args);
   try {
     switch (name) {

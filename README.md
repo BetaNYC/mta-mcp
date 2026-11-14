@@ -1,6 +1,6 @@
 # mta-mcp
 
-> ⚠️ **Alpha, v0.2.0.** This is early code. We are sharing it now to find out
+> ⚠️ **Alpha, v0.3.0.** This is early code. We are sharing it now to find out
 > what breaks. Tool names, parameters, and response shapes may change without
 > notice, so please don't build anything important on it yet.
 >
@@ -47,7 +47,7 @@ answer: [WHATS-CHANGED.md](WHATS-CHANGED.md), also on the
 
 ## What it does
 
-Exposes 6 tools over MCP: four that answer from MTA's data, and the two tools
+Exposes 7 tools over MCP: four that answer from MTA's data, and the three tools
 BetaNYC is adding to each of its MCP servers.
 
 | Tool | Description |
@@ -58,6 +58,7 @@ BetaNYC is adding to each of its MCP servers.
 | `get_accessibility_outages` | Elevator and escalator outages, current, upcoming, or on a date, with MTA's alternate routes |
 | `whats_changed` | What changed in this server, newest first, from [WHATS-CHANGED.md](WHATS-CHANGED.md), including corrections |
 | `about_betanyc` | Who built this server, where to report a bug in this server or ask for a new feature, and BetaNYC's links |
+| `about_data` | Where each kind of data comes from, whether it is official, how current it is, its terms, and where to report an error, from [DATA-SOURCES.json](DATA-SOURCES.json) |
 
 Every field in every answer is documented in [docs/tools.md](docs/tools.md).
 Elevators and escalators have their own guide, including known gaps:
@@ -277,7 +278,27 @@ repository and makes no request.
 Who built the server, its version, where to report a bug in this server or
 ask for a new feature, and links to BetaNYC. No parameters, no request.
 
-Both answer in plain text plus `structuredContent` that matches a declared
+### `about_data`
+
+Where the data comes from, source by source: MTA's two live feeds and the
+three snapshots kept in `data/`. For each it says who publishes it, whether
+it is MTA's record or has been changed by BetaNYC, how current it is on your
+copy (the live feeds are read when you ask; the snapshots give the date they
+were pulled), the terms that apply, where to check a figure, and where to
+report an error. Optional `topic`: `service-alerts`, `elevator-outages`,
+`stations`, `station-accessibility`, `elevator-inventory`, or a tool name for
+the sources behind that tool. It reads [DATA-SOURCES.json](DATA-SOURCES.json)
+and makes no request. Questions or error reports about the data can go to
+BetaNYC at lab@beta.nyc.
+
+`data.json` is the same facts as a DCAT-US 3.0 catalog, built from
+`DATA-SOURCES.json` by `scripts/whats_changed.py` (never edit it by hand):
+
+```bash
+python3 scripts/whats_changed.py about-data catalog DATA-SOURCES.json
+```
+
+All three answer in plain text plus `structuredContent` that matches a declared
 `outputSchema`, not in the compact JSON the other four use. They come from
 `src/betanyc-tools.ts`, a copy of a file BetaNYC is adding to each of its MCP
 servers: change it in the BetaNYC workspace, never here.
@@ -423,9 +444,9 @@ The answers are the same. The difference is where it works and what it costs:
   Desktop or other chat apps.
 - **The MCP server** works in any app that supports MCP, and spaces out every
   request to MTA in one place. It adds about 1,000 tokens of tool descriptions
-  to every conversation for the four MTA tools. Since 0.2.0, `whats_changed`
-  and `about_betanyc` make the whole tool list about 1.8 times as long, in
-  characters.
+  to every conversation for the four MTA tools. Since 0.3.0, `whats_changed`,
+  `about_betanyc` and `about_data` make the whole tool list about 2.8 times as
+  long, in characters.
 
 Setup and a fuller comparison: [skills/README.md](skills/README.md).
 
@@ -611,7 +632,7 @@ Layout:
 |---|---|
 | `src/index.ts` | stdio server wiring, nothing else |
 | `src/tools.ts` | tool schemas, strict argument parsing, dispatch |
-| `src/betanyc-tools.ts` | `whats_changed` and `about_betanyc`, a copy of the BetaNYC shared module. Never edit it here |
+| `src/betanyc-tools.ts` | `whats_changed`, `about_betanyc` and `about_data`, a copy of the BetaNYC shared module. Never edit it here |
 | `src/mta.ts` | fetch, rate limiting, parsing, effect classification, station matching |
 | `src/mta.test.ts` | unit tests for the pure functions |
 | `test/*.test.mjs` | tool-level, schema, rate-limiter, and skill tests against fixtures |
@@ -628,6 +649,9 @@ Layout:
 | `scripts/smoke.mjs` | the single live request |
 | `scripts/whats_changed.py` | checks `WHATS-CHANGED.md` and builds `docs/whats-changed.html`, a copy of the BetaNYC shared script. Never edit it here |
 | `WHATS-CHANGED.md` | the reader-facing record of changes, read by `whats_changed` |
+| `DATA-SOURCES.json` | where each kind of data comes from, read by `about_data` |
+| `data.json` | the same facts as a DCAT-US 3.0 catalog, built from `DATA-SOURCES.json`. Never edit it by hand |
+| `scripts/tests/catalog_validate.py`, `scripts/mcp_shared/` | the validators CI runs on those two files, copies of BetaNYC shared files. Never edit them here |
 | `docs/whats-changed.html` | the website's What's changed page, built from `WHATS-CHANGED.md` |
 
 Tool schemas reject unknown parameters, with an error that names the bad key

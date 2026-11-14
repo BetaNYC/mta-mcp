@@ -9,6 +9,36 @@ This package is not published to npm. Version numbers track the local build. See
 
 ## [Unreleased]
 
+## [0.3.0] — Unreleased
+
+Adds `about_data`, the third tool BetaNYC is adding to each of its MCP servers. Tracking:
+BetaNYC/betanyc-ai-workspace#1655 (epic #1652).
+
+### Added
+
+- `about_data`: where each kind of data comes from, whether it is MTA's record or changed by
+  BetaNYC, how current it is on this copy, its terms and credit line, where to check a figure
+  and where to report an error, with BetaNYC's contact address for data questions
+  (lab@beta.nyc). Optional `topic`: a source id or a tool name. No request to MTA.
+- `DATA-SOURCES.json`, the five sources (two live MTA feeds, three snapshots in `data/`),
+  every fact checked against MTA's and data.ny.gov's own pages. The snapshots' freshness is
+  the pull time already in each file, the same date the tools give in `snapshot_as_of`.
+- `data.json`, a DCAT-US 3.0 catalog built from `DATA-SOURCES.json` by
+  `scripts/whats_changed.py about-data catalog`. Never edit it by hand.
+- The server now sends MCP `instructions` saying when to call `about_data`, `about_betanyc`
+  and `whats_changed`.
+- `scripts/tests/catalog_validate.py`, `scripts/mcp_shared/data-sources.schema.json` and
+  `scripts/mcp_shared/vendor/dcat-us-3.0.0/`, copied unchanged from the BetaNYC workspace.
+- CI: an `about-data` job checks that every tool has a source, that `data.json` is current,
+  and validates both files against their JSON Schemas (pinned validators, CI only). The
+  "What's changed on main is dated" job also runs `about-data check --release`.
+- Tests: `test/about-data.test.mjs`; the tool-list tests now expect seven tools.
+
+### Changed
+
+- `src/betanyc-tools.ts` updated to shared module 1.3.6 (from 1.2.4), copied unchanged.
+  `scripts/whats_changed.py` updated to 1.3.5, copied unchanged.
+
 ## [0.2.0] — 2026-11-12
 
 The first version number since 0.1.0. Everything below reached the main branch between

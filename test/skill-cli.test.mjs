@@ -119,10 +119,10 @@ test("a missing build exits 2 and says how to fix it", () => {
   assert.match(r.err, /npm install/);
 });
 
-test("--help lists all six tools", () => {
+test("--help lists all seven tools", () => {
   const r = run(["--help"], freshCache());
   assert.equal(r.code, 0, r.err);
-  for (const name of ["check_route_on_date", "get_service_alerts", "resolve_station", "get_accessibility_outages", "whats_changed", "about_betanyc"]) {
+  for (const name of ["check_route_on_date", "get_service_alerts", "resolve_station", "get_accessibility_outages", "whats_changed", "about_betanyc", "about_data"]) {
     assert.ok(r.out.includes(name), name);
   }
   assert.ok(existsSync(script));

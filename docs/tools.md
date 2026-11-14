@@ -22,7 +22,7 @@ ever disagree, the code is right and this page needs fixing.
   for 60 seconds. See [Responsible use](../README.md#responsible-use).
 
 These rules, and the provenance below, are for the four MTA tools.
-[`whats_changed` and `about_betanyc`](#whats_changed-and-about_betanyc) answer
+[`whats_changed`, `about_betanyc` and `about_data`](#whats_changed-about_betanyc-and-about_data) answer
 in plain text with `structuredContent` and never fetch.
 
 ## Provenance on every answer
@@ -303,12 +303,12 @@ and `ada_data`. Each is described in
 the ADA status and alternate routes come from dated snapshots, and the dates
 are MTA's estimates. Read the [gaps](accessibility.md#gaps) first.
 
-## `whats_changed` and `about_betanyc`
+## `whats_changed`, `about_betanyc` and `about_data`
 
-The two tools BetaNYC is adding to each of its MCP servers, with the same
+The three tools BetaNYC is adding to each of its MCP servers, with the same
 names, inputs, and output in each. They come from `src/betanyc-tools.ts`, a copy of the
 BetaNYC workspace's `scripts/mcp_shared/betanyc-tools.ts`; change it there,
-never here. Neither makes a request.
+never here. None makes a request.
 
 `whats_changed` reads [WHATS-CHANGED.md](../WHATS-CHANGED.md) from the
 repository root and returns its entries, newest first. Parameters, all
@@ -323,7 +323,21 @@ and `limit` (1 to 50, default 10). An entry waiting for its release date
 repository and shared-module version, who built it, BetaNYC's links, and
 where to report a bug or ask for a feature.
 
-Both answer in plain text plus `structuredContent` that matches the
+`about_data` reads [DATA-SOURCES.json](../DATA-SOURCES.json) from the
+repository root and says, for each kind of data, what it is, who publishes it,
+whether it is MTA's record or changed by BetaNYC (`official`,
+`figures_official`, `changed_by_betanyc`), how it reaches the server, how
+current it is on this copy (`as_of`, `as_of_status`), coverage and known
+gaps, terms and credit line, where to check a figure, where to report an
+error, the tools that use it, caveats, and corrections. One optional
+parameter, `topic`: `service-alerts`, `elevator-outages`, `stations`,
+`station-accessibility`, `elevator-inventory`, a tool name (the sources behind
+that tool), or `all`. The two MTA feeds report `as_of_status: "live"`; the
+three snapshots report the same pull times as `snapshot_as_of`. The answer
+also gives `contact_email`, lab@beta.nyc, for questions or error reports
+about the data.
+
+All three answer in plain text plus `structuredContent` that matches the
 `outputSchema` they declare, and an unknown parameter is an error, as for the
 other four.
 

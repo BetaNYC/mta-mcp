@@ -1,0 +1,302 @@
+{
+  "format": "betanyc-data-sources/1",
+  "server": {
+    "name": "mta-mcp",
+    "title": "NYC subway service alerts and elevator outages MCP server",
+    "description": "An MCP server for NYC subway service alerts, elevator and escalator outages, and station lookup. Alerts and outages are read from MTA's live feeds when a tool is called; the station list, each station's accessibility status and MTA's elevator inventory are dated copies kept in the repository. Unofficial: BetaNYC is not the MTA. It is not published to npm because of MTA's data feed terms; you build it from source.",
+    "kind": "mcp",
+    "repository": "https://github.com/BetaNYC/mta-mcp",
+    "homepage": "https://betanyc.github.io/mta-mcp/",
+    "documentation_url": "https://github.com/BetaNYC/mta-mcp#readme",
+    "endpoint_urls": [],
+    "whats_changed_url": "https://betanyc.github.io/mta-mcp/whats-changed.html",
+    "license": {
+      "name": "MIT",
+      "url": "https://spdx.org/licenses/MIT.html"
+    },
+    "contact_email": "lab@beta.nyc",
+    "keywords": [
+      "nyc",
+      "mta",
+      "subway",
+      "service alerts",
+      "elevators",
+      "escalators",
+      "accessibility",
+      "gtfs-realtime"
+    ]
+  },
+  "sources": [
+    {
+      "id": "service-alerts",
+      "title": "Subway service alerts",
+      "what": "Every planned and live subway service alert in MTA's feed: the routes and stops each one names, when it applies, and MTA's own text describing it.",
+      "source_name": "MTA subway service alerts feed (GTFS-realtime, JSON)",
+      "publisher": {
+        "name": "Metropolitan Transportation Authority",
+        "url": "https://www.mta.info/"
+      },
+      "source_url": "https://api.mta.info/#/serviceAlerts",
+      "official": true,
+      "how_gathered": "Read-only requests to MTA's public feed when a tool is called, with no API key. Each response is kept in memory for up to 60 seconds, so an answer can lag the feed by about a minute.",
+      "changes": {
+        "changed": true,
+        "steps": [
+          "filtered",
+          "reshaped",
+          "fields-removed"
+        ],
+        "detail": "Each answer keeps only the alerts for the route, date or station asked about. MTA's text is passed on word for word, in English only. BetaNYC adds its own reading of each alert: an effect from MTA's alert type, whether it counts as a disruption, and, in check_route_on_date, a yes-or-no answer on whether the route is disrupted. Those added fields are BetaNYC's, not MTA's."
+      },
+      "verify_at": "https://www.mta.info/alerts",
+      "freshness": {
+        "kind": "live"
+      },
+      "update_frequency": "continual",
+      "coverage": {
+        "start": null,
+        "end": null,
+        "geography": "New York City subway and the Staten Island Railway",
+        "known_gaps": [
+          "Only what MTA puts in the feed at the moment of the request. Past alerts that MTA has removed from the feed cannot be looked up."
+        ]
+      },
+      "terms": {
+        "license_name": "None stated by the publisher; MTA's data feed terms and conditions apply",
+        "terms_url": "https://www.mta.info/developers/terms-and-conditions",
+        "credit_line": "Data obtained from the MTA. Unofficial: not provided by the MTA, and may not be accurate, complete or timely."
+      },
+      "report_errors": {
+        "upstream_url": "https://groups.google.com/g/mtadeveloperresources"
+      },
+      "tools": [
+        "check_route_on_date",
+        "get_service_alerts"
+      ],
+      "caveats": [
+        "MTA's terms say an app must not state or imply that the data is accurate, complete or timely. Confirm service at mta.info before you travel.",
+        "MTA publishes no refresh cadence for this feed, and answers can be up to a minute old, so every answer is marked as possibly not real time.",
+        "Which stops an alert affects comes from the alert's own list of stops, not from MTA's wider list of stations on the route."
+      ],
+      "corrections": [
+        "2026-09-23-service-alerts-that-gave-no-dates-were-left-out-of-every-date"
+      ]
+    },
+    {
+      "id": "elevator-outages",
+      "title": "Elevator and escalator outages",
+      "what": "Elevators and escalators that are out of service now or are scheduled to be: each one's equipment number, MTA's station name, the lines at the station, what the equipment connects, the reason, and MTA's dates.",
+      "source_name": "MTA elevator and escalator outage feeds (current and upcoming)",
+      "publisher": {
+        "name": "Metropolitan Transportation Authority",
+        "url": "https://www.mta.info/"
+      },
+      "source_url": "https://api.mta.info/#/EAndEFeeds",
+      "official": true,
+      "how_gathered": "Read-only requests to MTA's public feeds when a tool is called, with no API key. Each response is kept in memory for up to 60 seconds.",
+      "changes": {
+        "changed": true,
+        "steps": [
+          "filtered",
+          "merged",
+          "address-matched"
+        ],
+        "detail": "Each answer keeps only the outages for the station, line or date asked about. MTA's rows are passed on as published, and BetaNYC adds to each one: the station it is placed at, found by joining MTA's equipment number to MTA's elevator inventory (topic elevator-inventory) or, when that fails, by matching MTA's station name; how it was matched; and the inventory's details for that equipment."
+      },
+      "verify_at": "https://www.mta.info/elevator-escalator-status",
+      "freshness": {
+        "kind": "live"
+      },
+      "update_frequency": "continual",
+      "coverage": {
+        "start": null,
+        "end": null,
+        "geography": "New York City subway and the Staten Island Railway",
+        "known_gaps": [
+          "Only outages in the feed at the moment of the request; past outages cannot be looked up.",
+          "An outage whose equipment has no station in MTA's inventory, or whose station name this server cannot match, is counted but not placed at a station."
+        ]
+      },
+      "terms": {
+        "license_name": "None stated by the publisher; MTA's data feed terms and conditions apply",
+        "terms_url": "https://www.mta.info/developers/terms-and-conditions",
+        "credit_line": "Data obtained from the MTA. Unofficial: not provided by the MTA, and may not be accurate, complete or timely."
+      },
+      "report_errors": {
+        "upstream_url": "https://groups.google.com/g/mtadeveloperresources"
+      },
+      "tools": [
+        "get_accessibility_outages",
+        "check_route_on_date"
+      ],
+      "caveats": [
+        "Return-to-service dates are MTA's estimates.",
+        "An empty answer is not proof that nothing is out of service: check mta.info's elevator and escalator status page."
+      ],
+      "corrections": [
+        "2026-09-23-some-elevator-outages-were-missed-or-shown-at-the-wrong-station"
+      ]
+    },
+    {
+      "id": "stations",
+      "title": "Subway station list",
+      "what": "The subway's 496 parent stations: their GTFS stop ids, names, locations and the routes that serve each.",
+      "source_name": "MTA regular subway GTFS (static schedule data)",
+      "publisher": {
+        "name": "Metropolitan Transportation Authority",
+        "url": "https://www.mta.info/"
+      },
+      "source_url": "https://rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip",
+      "official": true,
+      "how_gathered": "A dated copy kept in the repository as data/stations.json, built from MTA's GTFS file by scripts/update-stations.mjs (npm run stations). The server never downloads it; whoever runs the server refreshes it by hand.",
+      "changes": {
+        "changed": true,
+        "steps": [
+          "filtered",
+          "merged",
+          "reshaped"
+        ],
+        "detail": "Only parent stations are kept (location_type 1), with their id, name and location. The routes serving each station are worked out by joining the GTFS trips and stop times."
+      },
+      "verify_at": "https://www.mta.info/developers",
+      "freshness": {
+        "kind": "hook",
+        "key": "stations_pulled"
+      },
+      "update_frequency": "irregular",
+      "coverage": {
+        "start": null,
+        "end": null,
+        "geography": "New York City subway and the Staten Island Railway",
+        "known_gaps": [
+          "MTA describes the regular GTFS as the normal schedule, updated a few times a year, without most temporary service changes. A new or renamed station is missing until the copy is refreshed."
+        ]
+      },
+      "terms": {
+        "license_name": "None stated by the publisher; MTA's data feed terms and conditions apply",
+        "terms_url": "https://www.mta.info/developers/terms-and-conditions",
+        "credit_line": "Data obtained from the MTA. Unofficial: not provided by the MTA, and may not be accurate, complete or timely."
+      },
+      "report_errors": {
+        "upstream_url": "https://groups.google.com/g/mtadeveloperresources"
+      },
+      "tools": [
+        "check_route_on_date",
+        "get_service_alerts",
+        "resolve_station",
+        "get_accessibility_outages"
+      ],
+      "caveats": [
+        "Answers that use the station list give the date it was pulled, and warn when it is more than 90 days old."
+      ]
+    },
+    {
+      "id": "station-accessibility",
+      "title": "Station accessibility status",
+      "what": "MTA's station-level ADA status for each station (not accessible, fully accessible or partly accessible), by direction, with MTA's notes.",
+      "source_name": "MTA Subway Stations (data.ny.gov dataset 39hk-dx4f)",
+      "publisher": {
+        "name": "Metropolitan Transportation Authority",
+        "url": "https://www.mta.info/"
+      },
+      "source_url": "https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f",
+      "official": true,
+      "how_gathered": "A dated copy kept in the repository as data/station_ada.json, pulled from the data.ny.gov API by scripts/update-accessibility-data.mjs (npm run accessibility-data). The server never downloads it; whoever runs the server refreshes it by hand.",
+      "changes": {
+        "changed": true,
+        "steps": [
+          "reshaped",
+          "fields-removed"
+        ],
+        "detail": "Only the ADA fields, direction labels and station ids are kept. Three fields are renamed (gtfs_stop_id to stop_id, station_id to station_mrn, complex_id to complex_mrn), numbers stored as text become numbers, and empty text becomes null. The ADA values are MTA's."
+      },
+      "verify_at": "https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f",
+      "freshness": {
+        "kind": "hook",
+        "key": "station_ada_pulled"
+      },
+      "update_frequency": "asNeeded",
+      "coverage": {
+        "start": null,
+        "end": null,
+        "geography": "New York City subway and the Staten Island Railway",
+        "known_gaps": [
+          "MTA updates the ADA fields as stations are made accessible, so a newly accessible station can lag, here and at the source."
+        ]
+      },
+      "terms": {
+        "license_name": "None stated by the publisher; the OPEN-NY Terms of Use apply",
+        "terms_url": "https://data.ny.gov/dataset/OPEN-NY-Terms-Of-Use/77gx-ii52",
+        "credit_line": "Source: Metropolitan Transportation Authority, MTA Subway Stations, data.ny.gov."
+      },
+      "report_errors": {
+        "upstream_url": "https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f",
+        "upstream_email": "OpenData@mtahq.org"
+      },
+      "tools": [
+        "check_route_on_date",
+        "resolve_station",
+        "get_accessibility_outages"
+      ],
+      "caveats": [
+        "Station-level status says whether a station has an accessible path, not whether that path works today: an elevator outage can make a fully accessible station unusable.",
+        "The server reports MTA's status as published and never infers accessibility from elevators.",
+        "Answers that use this copy give the date it was pulled, and warn when it is more than 30 days old."
+      ]
+    },
+    {
+      "id": "elevator-inventory",
+      "title": "Elevator and escalator inventory",
+      "what": "Every subway elevator and escalator MTA lists: its equipment number, type, station, whether it is ADA compliant, MTA's notes, and MTA's directions for when it is out of service.",
+      "source_name": "MTA Subway Elevator and Escalator Asset Inventory (data.ny.gov dataset 94fv-bak7)",
+      "publisher": {
+        "name": "Metropolitan Transportation Authority",
+        "url": "https://www.mta.info/"
+      },
+      "source_url": "https://data.ny.gov/Transportation/MTA-Subway-Elevator-and-Escalator-Asset-Inventory/94fv-bak7",
+      "official": true,
+      "how_gathered": "A dated copy kept in the repository as data/equipment.json, pulled from the data.ny.gov API by scripts/update-accessibility-data.mjs (npm run accessibility-data). The server never downloads it; whoever runs the server refreshes it by hand.",
+      "changes": {
+        "changed": true,
+        "steps": [
+          "reshaped",
+          "fields-removed",
+          "merged"
+        ],
+        "detail": "Only the fields the server uses are kept, station numbers stored as text become numbers, and empty text becomes null. BetaNYC adds stop_ids, the GTFS stations each piece of equipment is at, by joining MTA's station number to the station accessibility data (topic station-accessibility)."
+      },
+      "verify_at": "https://data.ny.gov/Transportation/MTA-Subway-Elevator-and-Escalator-Asset-Inventory/94fv-bak7",
+      "freshness": {
+        "kind": "hook",
+        "key": "equipment_pulled"
+      },
+      "update_frequency": "daily",
+      "coverage": {
+        "start": null,
+        "end": null,
+        "geography": "New York City subway and the Staten Island Railway",
+        "known_gaps": [
+          "Some equipment has no station number in the inventory (most are yard, shop and power-room elevators), so it is not placed at a station."
+        ]
+      },
+      "terms": {
+        "license_name": "None stated by the publisher; the OPEN-NY Terms of Use apply",
+        "terms_url": "https://data.ny.gov/dataset/OPEN-NY-Terms-Of-Use/77gx-ii52",
+        "credit_line": "Source: Metropolitan Transportation Authority, MTA Subway Elevator and Escalator Asset Inventory, data.ny.gov."
+      },
+      "report_errors": {
+        "upstream_url": "https://data.ny.gov/Transportation/MTA-Subway-Elevator-and-Escalator-Asset-Inventory/94fv-bak7",
+        "upstream_email": "opendata@mtahq.org"
+      },
+      "tools": [
+        "get_accessibility_outages",
+        "check_route_on_date"
+      ],
+      "caveats": [
+        "This is a list of equipment, not outage status.",
+        "MTA says fields filled in by hand, such as the alternate route, may lag. Treat the alternate route as MTA's text, possibly out of date.",
+        "Answers that use this copy give the date it was pulled, and warn when it is more than 30 days old."
+      ]
+    }
+  ]
+}

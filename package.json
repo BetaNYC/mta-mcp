@@ -1,6 +1,6 @@
 {
   "name": "mta-mcp",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "private": true,
   "description": "MCP server for NYC subway service alerts, elevator and escalator outages, and station lookup, from MTA's public feeds. Build from source; not on npm; status alpha.",
   "license": "MIT",
