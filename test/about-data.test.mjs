@@ -98,11 +98,13 @@ test("an unknown topic is an error that lists the topics", async () => {
   assert.match(r.content[0].text, /service-alerts/);
 });
 
-test("service alerts: MTA's values are not altered, and BetaNYC's reading is named as BetaNYC's", async () => {
+test("service alerts: what BetaNYC changes comes first, BetaNYC's reading is named as BetaNYC's, MTA's values unaltered", async () => {
   const s = one((await ask({ topic: "service-alerts" })).structuredContent, "service-alerts");
   assert.deepEqual(s.changed_by_betanyc.steps, ["filtered", "fields-removed", "merged", "counted"]);
-  assert.match(s.changed_by_betanyc.detail, /^BetaNYC does not alter MTA's values\./);
+  // Leads with what BetaNYC changes, so it agrees with the module's "Changed by BetaNYC" heading.
+  assert.match(s.changed_by_betanyc.detail, /^BetaNYC uses part of the feed/);
   assert.match(s.changed_by_betanyc.detail, /separate betanyc object/);
+  assert.match(s.changed_by_betanyc.detail, /MTA's own values are passed on unaltered\.$/);
   assert.doesNotMatch(s.changed_by_betanyc.detail, /word for word/, "englishText falls back to MTA's first version");
 });
 
@@ -119,6 +121,7 @@ test("the MTA credit line says BetaNYC is not the MTA and makes no accuracy clai
 
 test("elevator outages: BetaNYC's additions are named as such and kept in a betanyc object", async () => {
   const s = one((await ask({ topic: "elevator-outages" })).structuredContent, "elevator-outages");
-  assert.match(s.changed_by_betanyc.detail, /^BetaNYC does not alter MTA's values\./);
+  assert.match(s.changed_by_betanyc.detail, /^BetaNYC uses part of the feed/);
   assert.match(s.changed_by_betanyc.detail, /separate betanyc object on each row/);
+  assert.match(s.changed_by_betanyc.detail, /MTA's own values are passed on unaltered\.$/);
 });
