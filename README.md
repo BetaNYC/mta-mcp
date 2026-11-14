@@ -105,8 +105,10 @@ Is a route disrupted on a date, optionally at one station?
 | `include_accessibility` | boolean | no | Also list elevator and escalator outages at the station that day, with MTA's alternate routes. Needs a station. One extra request |
 
 Returns `disrupted`, the matching `alerts`, and a provenance block. Each alert
-carries its classified `effect`, the stops MTA named, and MTA's own
-rider-facing date string. The station carries MTA's ADA status. Elevator
+carries MTA's own fields (its status, text, the stops MTA named, and MTA's
+rider-facing date string) and, in a separate `betanyc` object, BetaNYC's
+reading of it: the classified `effect` and whether it counts as a disruption.
+`disrupted` is BetaNYC's answer from those, not MTA's. The station carries MTA's ADA status. Elevator
 outages are included only when you ask, to keep the default answer small.
 
 ```json
@@ -133,15 +135,17 @@ outages are included only when you ask, to keep the default answer small.
     {
       "entity_id": "lmm:planned_work:33826",
       "alert_type": "Planned - Part Suspended",
-      "effect": "reduced",
-      "counts_as_disruption": true,
-      "affects_this_station": false,
       "header_text": "No [6] between Hunts Point Av and 125 St",
       "human_readable_active_period": "Sep 18 - Oct 19, Fri 9:30 PM to Mon 5:00 AM",
       "affected_stops": [
         { "stop_id": "614", "stop_name": "Longwood Av" },
         { "stop_id": "615", "stop_name": "E 149 St" }
-      ]
+      ],
+      "betanyc": {
+        "effect": "reduced",
+        "counts_as_disruption": true,
+        "affects_this_station": false
+      }
     }
   ],
   "may_not_be_realtime": true,
@@ -526,14 +530,15 @@ The feed never sends an all-clear.
 express train making local stops means more trains at those stations. A check
 that only asks "is this station named in an alert?" would report a disruption
 there. This server classifies on `alert_type` instead. It reports these alerts
-as `effect: "added_at_local_stops"` with `counts_as_disruption: false`, and
-still sets `affects_this_station: true` so you can see the change.
+as `betanyc.effect: "added_at_local_stops"` with
+`betanyc.counts_as_disruption: false`, and still sets
+`betanyc.affects_this_station: true` so you can see the change.
 
 ### Unknown alert types count as disruptions
 
 The `alert_type` to effect map covers the 11 values we saw in a live pull on
 2026-09-16. MTA's status table lists 35, and the list isn't a documented, fixed
-set. Any value the map doesn't recognize gets `effect: "unknown"`, counts as a
+set. Any value the map doesn't recognize gets `betanyc.effect: "unknown"`, counts as a
 disruption, appears in the response's `unknown_alert_types`, and applies to
 every station on the route, since its station tagging can't be trusted either.
 

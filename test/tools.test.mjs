@@ -78,10 +78,29 @@ test("route 6 on 2026-09-19 returns the Bronx suspension and only that", async (
   const alert = result.alerts[0];
   assert.equal(alert.entity_id, "lmm:planned_work:33826");
   assert.equal(alert.alert_type, "Planned - Part Suspended");
-  assert.equal(alert.effect, "reduced");
+  assert.equal(alert.betanyc.effect, "reduced");
   assert.equal(result.disrupted, true, "the 6 IS disrupted somewhere on this date");
   assert.match(alert.header_text, /No \[6\] between Hunts Point Av and 125 St/);
   assert.equal(alert.human_readable_active_period, "Sep 18 - Oct 19, Fri 9:30 PM to Mon 5:00 AM");
+});
+
+test("BetaNYC's reading of each alert sits in a `betanyc` object, apart from MTA's fields", async () => {
+  // MTA's terms (term 5): "You will not modify or delete any of the data." The alert's own
+  // fields are MTA's; what BetaNYC works out from them is nested, so a reader can tell them apart.
+  const BETANYC_KEYS = ["effect", "counts_as_disruption", "planned", "alert_type_recognized"];
+  const STATION_KEYS = ["affects_this_station", "relevant_to_station", "station_level_detail"];
+  const route = await call("check_route_on_date", { route_id: "6", date: SAT, station: "125 St" });
+  const listed = await call("get_service_alerts", { date: SAT, route_id: "6" });
+  for (const alert of [...route.alerts, ...listed.alerts]) {
+    for (const k of [...BETANYC_KEYS, ...STATION_KEYS]) assert.equal(k in alert, false, `${k} is not beside MTA's fields`);
+    for (const k of BETANYC_KEYS) assert.ok(k in alert.betanyc, k);
+    assert.ok("alert_type" in alert && "header_text" in alert, "MTA's own fields stay at the top level");
+  }
+  for (const alert of route.alerts) for (const k of STATION_KEYS) assert.ok(k in alert.betanyc, k);
+  for (const alert of listed.alerts) for (const k of STATION_KEYS) assert.equal(k in alert.betanyc, false, k);
+  for (const tool of ["check_route_on_date", "get_service_alerts"]) {
+    assert.match(TOOLS.find((t) => t.name === tool).description, /`betanyc`/, `${tool} describes the betanyc object`);
+  }
 });
 
 test("the affected stops are exactly 614-619, and 628 is not among them", async () => {
@@ -114,7 +133,7 @@ test("the 6 serves 68 St-Hunter College normally that Saturday", async () => {
   assert.equal(result.station.stop_id, "628");
   assert.equal(result.disrupted, false);
   assert.equal(result.station_level_detail, true);
-  assert.equal(result.alerts[0].affects_this_station, false);
+  assert.equal(result.alerts[0].betanyc.affects_this_station, false);
 });
 
 // ─── The false-positive guard ────────────────────────────────────────────────
@@ -132,9 +151,9 @@ test("an express-to-local alert tags 628 but is not a disruption there", async (
     const alert = result.alerts.find((a) => a.entity_id === entityId);
     assert.ok(alert, `route ${route} should surface ${entityId}`);
     assert.equal(alert.alert_type, "Planned - Express to Local");
-    assert.equal(alert.effect, "added_at_local_stops");
-    assert.equal(alert.affects_this_station, true, "the station IS named in the alert");
-    assert.equal(alert.counts_as_disruption, false);
+    assert.equal(alert.betanyc.effect, "added_at_local_stops");
+    assert.equal(alert.betanyc.affects_this_station, true, "the station IS named in the alert");
+    assert.equal(alert.betanyc.counts_as_disruption, false);
     assert.equal(
       result.disrupted,
       false,
@@ -240,7 +259,7 @@ test("with no station tagging, a route-level alert still counts against a statio
     date: SAT,
     stop_id: "628", // not a Q station, but the point is the untagged alert
   });
-  assert.equal(result.alerts[0].relevant_to_station, true);
+  assert.equal(result.alerts[0].betanyc.relevant_to_station, true);
   assert.equal(result.disrupted, true);
   assert.equal(result.station_serves_route, false);
 });
@@ -279,7 +298,7 @@ test("get_service_alerts filters by date, route, type, effect and planned_only",
   assert.equal(wed.alert_count, 2);
   const planned = await call("get_service_alerts", { date: "2026-09-16", planned_only: true });
   assert.equal(planned.alert_count, 1);
-  assert.equal(planned.alerts[0].planned, true);
+  assert.equal(planned.alerts[0].betanyc.planned, true);
   assert.equal(planned.alerts[0].entity_id, "lmm:planned_work:33366");
 });
 
@@ -795,8 +814,8 @@ test("an alert_type this server has never seen counts as a disruption", async ()
   alertsBody = mutated;
   try {
     const routeLevel = await call("check_route_on_date", { route_id: "6", date: SAT });
-    assert.equal(routeLevel.alerts[0].effect, "unknown");
-    assert.equal(routeLevel.alerts[0].alert_type_recognized, false);
+    assert.equal(routeLevel.alerts[0].betanyc.effect, "unknown");
+    assert.equal(routeLevel.alerts[0].betanyc.alert_type_recognized, false);
     assert.equal(routeLevel.disrupted, true);
     assert.deepEqual(routeLevel.unknown_alert_types, ["Planned - Something MTA Invented In 2027"]);
 
@@ -808,8 +827,8 @@ test("an alert_type this server has never seen counts as a disruption", async ()
       date: SAT,
       station: "68 St-Hunter College",
     });
-    assert.equal(atStation.alerts[0].affects_this_station, false);
-    assert.equal(atStation.alerts[0].relevant_to_station, true);
+    assert.equal(atStation.alerts[0].betanyc.affects_this_station, false);
+    assert.equal(atStation.alerts[0].betanyc.relevant_to_station, true);
     assert.equal(
       atStation.disrupted,
       true,

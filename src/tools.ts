@@ -87,7 +87,7 @@ export const TOOLS = [
   {
     name: "check_route_on_date",
     description:
-      "Is a subway route disrupted on a given date, optionally at one station? Dates are interpreted in America/New_York. Answers from MTA's service-alert feed. A station that only GAINS service (an express train running local) is reported as affected but NOT disrupted. Station-level absence is not absence of impact — read station_level_detail before treating disrupted:false as a guarantee. The station carries MTA's ADA status; elevator outages are included only with include_accessibility:true. Station names and ADA status come from local snapshots the user must refresh; snapshot_as_of gives their dates and snapshot_warning flags old ones.",
+      "Is a subway route disrupted on a given date, optionally at one station? Dates are interpreted in America/New_York. Answers from MTA's service-alert feed. A station that only GAINS service (an express train running local) is reported as affected but NOT disrupted. Station-level absence is not absence of impact — read station_level_detail before treating disrupted:false as a guarantee. The station carries MTA's ADA status; elevator outages are included only with include_accessibility:true. Each alert's own fields are MTA's; BetaNYC's reading of it (effect, counts_as_disruption, planned, alert_type_recognized, and whether it bears on the station) is in its `betanyc` object, and disrupted is BetaNYC's answer from those, not MTA's. Station names and ADA status come from local snapshots the user must refresh; snapshot_as_of gives their dates and snapshot_warning flags old ones.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -118,7 +118,7 @@ export const TOOLS = [
   {
     name: "get_service_alerts",
     description:
-      "List MTA subway service alerts active on a date, with optional filters. Defaults to today in America/New_York. Use this for open-ended questions like what is happening on a line this weekend. Stop names come from a local station snapshot the user must refresh; see snapshot_as_of and snapshot_warning.",
+      "List MTA subway service alerts active on a date, with optional filters. Defaults to today in America/New_York. Use this for open-ended questions like what is happening on a line this weekend. Each alert's own fields are MTA's; BetaNYC's reading of it (effect, counts_as_disruption, planned, alert_type_recognized) is in its `betanyc` object, and disrupting_alert_count counts those. Stop names come from a local station snapshot the user must refresh; see snapshot_as_of and snapshot_warning.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -293,7 +293,14 @@ function entitiesForRoute(alert: Alert, routeId: string): InformedEntity[] {
 const isPlannedWork = (entityId: string | undefined): boolean =>
   (entityId ?? "").startsWith("lmm:planned_work:");
 
-/** Shape one alert for output. `affected_stops` comes from informed_entity only. */
+/**
+ * Shape one alert for output. `affected_stops` comes from informed_entity only.
+ *
+ * MTA's fields stay at the top level, with their values as MTA gives them (the text in the
+ * English version where MTA gives one). What BetaNYC works out from them goes in `betanyc`, so
+ * a reader can tell the two apart: MTA's terms (term 5) say "You will not modify or delete any
+ * of the data", and these readings are BetaNYC's, not MTA's. See docs/terms-compliance.md.
+ */
 function shapeAlert(entity: AlertEntity, routeIds: string[] | null) {
   const alert = entity.alert ?? {};
   const mercury = alert["transit_realtime.mercury_alert"];
@@ -311,16 +318,18 @@ function shapeAlert(entity: AlertEntity, routeIds: string[] | null) {
   return {
     entity_id: entity.id ?? null,
     alert_type: alertType ?? null,
-    alert_type_recognized: isKnownAlertType(alertType),
-    effect,
-    counts_as_disruption: isDisrupting(effect),
-    planned: isPlannedWork(entity.id),
     routes: [...new Set((alert.informed_entity ?? []).map((e) => e.route_id).filter(Boolean))],
     header_text: englishText(alert.header_text),
     description_text: englishText(alert.description_text),
     human_readable_active_period: englishText(mercury?.human_readable_active_period),
     affected_stops: stops,
     active_periods: alert.active_period ?? [],
+    betanyc: {
+      effect,
+      counts_as_disruption: isDisrupting(effect),
+      planned: isPlannedWork(entity.id),
+      alert_type_recognized: isKnownAlertType(alertType),
+    },
   };
 }
 
@@ -386,28 +395,32 @@ async function checkRouteOnDate(args: {
     const taggedStops = routeEntities.filter((e) => e.stop_id).map((e) => e.stop_id);
     const hasStationDetail = taggedStops.length > 0;
     const tagsThisStation = station ? taggedStops.includes(station.stop_id) : false;
+    const base = shapeAlert(entity, [args.route_id]);
     return {
-      ...shapeAlert(entity, [args.route_id]),
-      // No station asked about → the question does not apply.
-      affects_this_station: station ? tagsThisStation : null,
+      ...base,
+      betanyc: {
+        ...base.betanyc,
+        // No station asked about → the question does not apply.
+        affects_this_station: station ? tagsThisStation : null,
       // Three ways an alert bears on a specific station: MTA named it; MTA
       // named no stations at all (so the alert is route-wide as far as we
       // know); or the alert_type is one we do not recognize, in which case we
       // cannot claim to know what its station tagging means either. Fail
       // toward caution on all three.
-      relevant_to_station: station
-        ? tagsThisStation || !hasStationDetail || effectFor(alertType) === "unknown"
-        : true,
-      station_level_detail: hasStationDetail,
+        relevant_to_station: station
+          ? tagsThisStation || !hasStationDetail || effectFor(alertType) === "unknown"
+          : true,
+        station_level_detail: hasStationDetail,
+      },
     };
   });
 
-  const considered = station ? shaped.filter((a) => a.relevant_to_station) : shaped;
-  const disrupted = considered.some((a) => a.counts_as_disruption);
-  const stationLevelDetail = shaped.length > 0 && shaped.every((a) => a.station_level_detail);
+  const considered = station ? shaped.filter((a) => a.betanyc.relevant_to_station) : shaped;
+  const disrupted = considered.some((a) => a.betanyc.counts_as_disruption);
+  const stationLevelDetail = shaped.length > 0 && shaped.every((a) => a.betanyc.station_level_detail);
 
   const unknownAlertTypes = [
-    ...new Set(shaped.filter((a) => !a.alert_type_recognized).map((a) => a.alert_type)),
+    ...new Set(shaped.filter((a) => !a.betanyc.alert_type_recognized).map((a) => a.alert_type)),
   ];
 
   // Opt-in only, and only once a station is known. One request to the current
@@ -519,9 +532,9 @@ async function getServiceAlerts(args: {
       effect: args.effect ?? null,
     },
     alert_count: shaped.length,
-    disrupting_alert_count: shaped.filter((a) => a.counts_as_disruption).length,
+    disrupting_alert_count: shaped.filter((a) => a.betanyc.counts_as_disruption).length,
     unknown_alert_types: [
-      ...new Set(shaped.filter((a) => !a.alert_type_recognized).map((a) => a.alert_type)),
+      ...new Set(shaped.filter((a) => !a.betanyc.alert_type_recognized).map((a) => a.alert_type)),
     ],
     known_alert_types: Object.keys(EFFECT_BY_ALERT_TYPE),
     alerts: shaped,

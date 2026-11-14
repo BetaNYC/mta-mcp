@@ -11,8 +11,9 @@ This package is not published to npm. Version numbers track the local build. See
 
 ## [0.3.0] — Unreleased
 
-Adds `about_data`, the third tool BetaNYC is adding to each of its MCP servers. Tracking:
-BetaNYC/betanyc-ai-workspace#1655 (epic #1652).
+Adds `about_data`, the third tool BetaNYC is adding to each of its MCP servers, and keeps
+BetaNYC's reading of each service alert apart from MTA's fields. **The alert output changes
+shape** (see Changed). Tracking: BetaNYC/betanyc-ai-workspace#1655 (epic #1652).
 
 ### Added
 
@@ -36,8 +37,19 @@ BetaNYC/betanyc-ai-workspace#1655 (epic #1652).
 
 ### Changed
 
-- `src/betanyc-tools.ts` updated to shared module 1.3.6 (from 1.2.4), copied unchanged.
-  `scripts/whats_changed.py` updated to 1.3.5, copied unchanged.
+- **Output change, `check_route_on_date` and `get_service_alerts`:** each alert's
+  `effect`, `counts_as_disruption`, `planned` and `alert_type_recognized`, and in
+  `check_route_on_date` its `affects_this_station`, `relevant_to_station` and
+  `station_level_detail`, moved into a new `betanyc` object on the alert. They are BetaNYC's
+  reading of MTA's alert, not MTA's data; MTA's fields stay at the top level with MTA's values.
+  MTA's terms (term 5) say an app must not modify the data, and the old layout put BetaNYC's
+  fields beside MTA's unmarked. Top-level answer fields (`disrupted`, `disrupting_alert_count`,
+  the response's `station_level_detail`, `unknown_alert_types`) are unchanged. A client that read
+  `alert.effect` now reads `alert.betanyc.effect`. Tool descriptions, README, `docs/tools.md`,
+  `docs/index.html` and the skill updated.
+- `docs/terms-compliance.md`: a fourth obligation, "Not modifying the data" (term 5).
+- `src/betanyc-tools.ts` and `scripts/whats_changed.py` updated to shared module 1.3.7
+  (from 1.2.4), copied unchanged.
 
 ## [0.2.0] — 2026-11-12
 

@@ -69,22 +69,32 @@ and the refresh command. See
 ## The alert fields
 
 `check_route_on_date` and `get_service_alerts` describe each alert with these
-fields:
+fields. The top-level fields are MTA's, with MTA's values. What BetaNYC works
+out from them is in the alert's `betanyc` object, so the two are never mixed
+up: MTA's terms say an app must not modify the data (see
+[terms-compliance.md](terms-compliance.md#four-more-obligations-however-this-is-run)). Before
+0.3.0 the `betanyc` fields sat beside MTA's.
 
 | Field | Meaning |
 |---|---|
 | `entity_id` | MTA's id for the alert. `lmm:planned_work:…` is scheduled work, `lmm:alert:…` is a live incident. Include it in bug reports |
 | `alert_type` | MTA's status, like `"Planned - Part Suspended"` |
-| `alert_type_recognized` | `false` if this server doesn't know that status yet |
-| `effect` | What the status means for riders. See [Effects](#effects) |
-| `counts_as_disruption` | Whether this alert makes the route "disrupted" |
-| `planned` | `true` if the id starts `lmm:planned_work:`. That's an observed pattern, not something MTA documents |
 | `routes` | Every route the alert names |
-| `header_text` | MTA's headline, in English. Routes appear as `[6]` |
-| `description_text` | MTA's longer text, in English, or `null` |
+| `header_text` | MTA's headline, in the English version where MTA gives one (otherwise MTA's first version). Routes appear as `[6]` |
+| `description_text` | MTA's longer text, chosen the same way, or `null` |
 | `human_readable_active_period` | MTA's own wording for when it applies, like `"Sep 18 - Oct 19, Fri 9:30 PM to Mon 5:00 AM"`. Use this in anything a person reads |
 | `affected_stops` | Stations MTA tagged, as `{stop_id, stop_name}`, from `informed_entity`. When you asked about one route, only that route's stops. Empty if MTA tagged none |
 | `active_periods` | MTA's raw periods, as `{start, end}` in epoch seconds. A missing `start` or `end` means open-ended |
+| `betanyc` | BetaNYC's reading of the alert, not MTA's data. The fields below |
+
+In `betanyc`:
+
+| Field | Meaning |
+|---|---|
+| `effect` | What the status means for riders, from BetaNYC's table. See [Effects](#effects) |
+| `counts_as_disruption` | Whether this alert makes the route "disrupted" |
+| `planned` | `true` if the id starts `lmm:planned_work:`. That's an observed pattern, not something MTA documents |
+| `alert_type_recognized` | `false` if this server doesn't know that status yet |
 
 An alert is active on a date if any of its periods overlaps that day in New
 York time. An alert with no periods at all is active on every date. The
@@ -160,7 +170,7 @@ Is a route disrupted on a date, optionally at one station?
 | `accessibility_note` | With a station, what `station.accessibility` means and doesn't. Otherwise `null` |
 | `accessibility_outages` | With `include_accessibility: true`, the station's elevator and escalator outages that day, with MTA's alternate routes. Otherwise `null`. Fields in [docs/accessibility.md](accessibility.md#elevators-in-check_route_on_date) |
 
-Extra fields on each alert:
+Extra fields in each alert's `betanyc` object:
 
 | Field | Meaning |
 |---|---|

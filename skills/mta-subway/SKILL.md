@@ -60,7 +60,7 @@ Check these before you tell anyone a train is fine:
    with `route_id`.
 2. **`station_level_detail: false`** means MTA didn't say which stations an
    alert covers. `disrupted: false` is then not a guarantee. Say so.
-3. **`effect: "added_at_local_stops"`** means the station gets *more* trains
+3. **`betanyc.effect: "added_at_local_stops"`** means the station gets *more* trains
    (an express running local). It's listed but isn't a disruption. Don't report
    it as a problem.
 4. **A non-empty `unknown_alert_types`** means MTA used a status the script
