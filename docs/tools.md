@@ -71,9 +71,10 @@ and the refresh command. See
 `check_route_on_date` and `get_service_alerts` describe each alert with these
 fields. The top-level fields are MTA's, with MTA's values. What BetaNYC works
 out from them is in the alert's `betanyc` object, so the two are never mixed
-up: MTA's terms say an app must not modify the data (see
-[terms-compliance.md](terms-compliance.md#four-more-obligations-however-this-is-run)). Before
-0.3.0 the `betanyc` fields sat beside MTA's.
+up: MTA's terms say an app must not modify or delete the data, so MTA's values
+stay as MTA published them. `about_data` still says "BetaNYC modified this data",
+under BetaNYC's own stricter rule; [terms-compliance.md](terms-compliance.md#four-more-obligations-however-this-is-run)
+explains both. Before 0.3.0 the `betanyc` fields sat beside MTA's.
 
 | Field | Meaning |
 |---|---|

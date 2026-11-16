@@ -94,7 +94,12 @@ MTA's row as published, with BetaNYC's additions (how the row was placed at a
 station, a note when the evidence is mixed, and the details from MTA's
 equipment inventory) in its own `betanyc` object. Answers such as `disrupted`
 are BetaNYC's, not MTA's.
-`about_data` says the same for each source.
+
+`about_data` says "BetaNYC modified this data" for all five MTA sources. Under
+BetaNYC's own rule, any filtering, reshaping or picking part of a feed counts as
+modified. In term 5's sense, MTA's values are unchanged. Each answer uses part of
+the feed, which term 5 allows, and BetaNYC's additions sit in the separate
+`betanyc` object.
 
 MTA can also change these terms or shut off the feeds at any time, without
 notice. If you use this for event-day travel, keep a manual fallback.
