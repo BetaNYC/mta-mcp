@@ -7,6 +7,13 @@ This page lists the changes to mta-mcp that a reader would notice: new tools, ne
 
 mta-mcp is not published to npm. You run it from your own copy of the repository, so a change reaches you when you update that copy and rebuild it. To report a bug in this server or ask for a new feature, [open an issue on GitHub](https://github.com/BetaNYC/mta-mcp/issues).
 
+## Unreleased: Ask where the data comes from, and BetaNYC's additions are marked
+
+- **Tags:** MCP
+- **What changed:** Every answer now keeps what BetaNYC adds apart from MTA's own information. For a service alert, BetaNYC's reading, such as whether it counts as a disruption and what it means for riders, sits in a separate part of the answer labeled betanyc. For an elevator or escalator outage, the same part holds how BetaNYC placed it at a station and the details from MTA's equipment list, including MTA's alternate route. That way BetaNYC's work is never mistaken for MTA's data. If you use these answers in your own tools, read those fields from their new place. A new tool lets your AI assistant answer "where does this come from?" for any answer from this server. It names the source behind each kind of data: MTA's live feeds for service alerts and elevator outages, and MTA's station list, station accessibility status and elevator inventory, which this server keeps as dated copies. For each, it says whether the figures are MTA's own record or have been changed by BetaNYC, how current they are on your copy, where to check a figure at MTA, and where to report a mistake. It also gives BetaNYC's address for questions about the data, lab@beta.nyc.
+- **MCP version:** [mta-mcp 0.3.0](CHANGELOG.md)
+- **More detail:** [Where the data comes from](DATA-SOURCES.json) · [Data sources](docs/data-sources.md)
+
 ## 2026-11-12: A What's changed page, and two tools that explain the server
 
 - **Tags:** Site, MCP

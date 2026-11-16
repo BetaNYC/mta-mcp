@@ -132,7 +132,7 @@ ul.tight li{margin-bottom:6px}
 </head>
 <body>
 
-<div class="alpha-bar">⚠️ Alpha, v0.2.0. Early code, shared now so we can find out what breaks.
+<div class="alpha-bar">⚠️ Alpha, v0.3.0. Early code, shared now so we can find out what breaks.
 Tool names and response shapes may change without notice, so please don't build anything
 important on it yet.
 <a href="https://github.com/BetaNYC/mta-mcp/issues">Tell us what's wrong</a></div>
@@ -312,16 +312,18 @@ with the repo, so it changes only when MTA renames a station.</div>
       "outagedate": "11/06/2024 09:00:00 AM",
       "estimatedreturntoservice": "09/30/2026 11:59:00 PM",
       "reason": "Capital Replacement",
-      "matched_by": "name",
-      "match_note": "MTA's equipment inventory places EL133 at 161 St-Yankee Stadium (D11), another station in this complex. The outage feed's station name fits this station too, so it is listed here.",
-      "inventory": {
-        "stop_ids": ["D11"],
-        "ada_compliant": "YES",
-        "redundant_elevator": "-",
-        "alternative_route": "To access street level: Take a Manhattan-bound
-          4 to 125 St. Use elevators to transfer to a Bronx-bound 6. Exit at
-          Hunts Point Av and transfer to a Washington Heights-bound Bx6-SBS
-          bus to E 161 St and River Av. …"
+      "betanyc": {
+        "matched_by": "name",
+        "match_note": "MTA's equipment inventory places EL133 at 161 St-Yankee Stadium (D11), another station in this complex. The outage feed's station name fits this station too, so it is listed here.",
+        "inventory": {
+          "stop_ids": ["D11"],
+          "ada_compliant": "YES",
+          "redundant_elevator": "-",
+          "alternative_route": "To access street level: Take a Manhattan-bound
+            4 to 125 St. Use elevators to transfer to a Bronx-bound 6. Exit at
+            Hunts Point Av and transfer to a Washington Heights-bound Bx6-SBS
+            bus to E 161 St and River Av. …"
+        }
       }
     }
   ]
@@ -406,15 +408,17 @@ little from the one shown.</p>
   "alert_count": 1,
   "alerts": [{
     "alert_type": "Planned - Part Suspended",
-    "effect": "reduced",
     "header_text": "No [6] between Hunts Point Av and 125 St",
     "human_readable_active_period": "Sep 18 - Oct 19, Fri 9:30 PM to Mon 5:00 AM",
     "affected_stops": [
       { "stop_id": "614", "stop_name": "Longwood Av" },
       …five more Bronx stations…
     ],
-    "affects_this_station": false,
-    "relevant_to_station": false
+    "betanyc": {
+      "effect": "reduced",
+      "affects_this_station": false,
+      "relevant_to_station": false
+    }
   }],
   "accessibility_outages": {
     "outage_count": 0,

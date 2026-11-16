@@ -99,7 +99,7 @@ if (result.isError) {
   process.exit(1);
 }
 
-// whats_changed and about_betanyc answer in plain text (plus structuredContent),
+// whats_changed, about_betanyc and about_data answer in plain text (plus structuredContent),
 // not JSON, and never fetch, so print their text as it is.
 if (result.structuredContent) {
   console.log(text);

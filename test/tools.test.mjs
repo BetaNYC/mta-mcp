@@ -78,10 +78,29 @@ test("route 6 on 2026-09-19 returns the Bronx suspension and only that", async (
   const alert = result.alerts[0];
   assert.equal(alert.entity_id, "lmm:planned_work:33826");
   assert.equal(alert.alert_type, "Planned - Part Suspended");
-  assert.equal(alert.effect, "reduced");
+  assert.equal(alert.betanyc.effect, "reduced");
   assert.equal(result.disrupted, true, "the 6 IS disrupted somewhere on this date");
   assert.match(alert.header_text, /No \[6\] between Hunts Point Av and 125 St/);
   assert.equal(alert.human_readable_active_period, "Sep 18 - Oct 19, Fri 9:30 PM to Mon 5:00 AM");
+});
+
+test("BetaNYC's reading of each alert sits in a `betanyc` object, apart from MTA's fields", async () => {
+  // MTA's terms (term 5): "You will not modify or delete any of the data." The alert's own
+  // fields are MTA's; what BetaNYC works out from them is nested, so a reader can tell them apart.
+  const BETANYC_KEYS = ["effect", "counts_as_disruption", "planned", "alert_type_recognized"];
+  const STATION_KEYS = ["affects_this_station", "relevant_to_station", "station_level_detail"];
+  const route = await call("check_route_on_date", { route_id: "6", date: SAT, station: "125 St" });
+  const listed = await call("get_service_alerts", { date: SAT, route_id: "6" });
+  for (const alert of [...route.alerts, ...listed.alerts]) {
+    for (const k of [...BETANYC_KEYS, ...STATION_KEYS]) assert.equal(k in alert, false, `${k} is not beside MTA's fields`);
+    for (const k of BETANYC_KEYS) assert.ok(k in alert.betanyc, k);
+    assert.ok("alert_type" in alert && "header_text" in alert, "MTA's own fields stay at the top level");
+  }
+  for (const alert of route.alerts) for (const k of STATION_KEYS) assert.ok(k in alert.betanyc, k);
+  for (const alert of listed.alerts) for (const k of STATION_KEYS) assert.equal(k in alert.betanyc, false, k);
+  for (const tool of ["check_route_on_date", "get_service_alerts"]) {
+    assert.match(TOOLS.find((t) => t.name === tool).description, /`betanyc`/, `${tool} describes the betanyc object`);
+  }
 });
 
 test("the affected stops are exactly 614-619, and 628 is not among them", async () => {
@@ -114,7 +133,7 @@ test("the 6 serves 68 St-Hunter College normally that Saturday", async () => {
   assert.equal(result.station.stop_id, "628");
   assert.equal(result.disrupted, false);
   assert.equal(result.station_level_detail, true);
-  assert.equal(result.alerts[0].affects_this_station, false);
+  assert.equal(result.alerts[0].betanyc.affects_this_station, false);
 });
 
 // ─── The false-positive guard ────────────────────────────────────────────────
@@ -132,9 +151,9 @@ test("an express-to-local alert tags 628 but is not a disruption there", async (
     const alert = result.alerts.find((a) => a.entity_id === entityId);
     assert.ok(alert, `route ${route} should surface ${entityId}`);
     assert.equal(alert.alert_type, "Planned - Express to Local");
-    assert.equal(alert.effect, "added_at_local_stops");
-    assert.equal(alert.affects_this_station, true, "the station IS named in the alert");
-    assert.equal(alert.counts_as_disruption, false);
+    assert.equal(alert.betanyc.effect, "added_at_local_stops");
+    assert.equal(alert.betanyc.affects_this_station, true, "the station IS named in the alert");
+    assert.equal(alert.betanyc.counts_as_disruption, false);
     assert.equal(
       result.disrupted,
       false,
@@ -240,7 +259,7 @@ test("with no station tagging, a route-level alert still counts against a statio
     date: SAT,
     stop_id: "628", // not a Q station, but the point is the untagged alert
   });
-  assert.equal(result.alerts[0].relevant_to_station, true);
+  assert.equal(result.alerts[0].betanyc.relevant_to_station, true);
   assert.equal(result.disrupted, true);
   assert.equal(result.station_serves_route, false);
 });
@@ -279,7 +298,7 @@ test("get_service_alerts filters by date, route, type, effect and planned_only",
   assert.equal(wed.alert_count, 2);
   const planned = await call("get_service_alerts", { date: "2026-09-16", planned_only: true });
   assert.equal(planned.alert_count, 1);
-  assert.equal(planned.alerts[0].planned, true);
+  assert.equal(planned.alerts[0].betanyc.planned, true);
   assert.equal(planned.alerts[0].entity_id, "lmm:planned_work:33366");
 });
 
@@ -569,9 +588,10 @@ test("include_accessibility adds the station's outages that day, for one extra r
     const acc = result.accessibility_outages;
     assert.equal(acc.feed_url, ENE_CURRENT_URL);
     assert.deepEqual(acc.outages.map((o) => o.equipment).sort(), ["EL431", "EL432", "EL433"]);
-    assert.ok(acc.outages.every((o) => o.matched_by === "equipment id"));
+    assert.ok(acc.outages.every((o) => o.betanyc.matched_by === "equipment id"));
     const el433 = acc.outages.find((o) => o.equipment === "EL433");
-    assert.match(el433.alternative_route, /Kew Gardens-Union Tpke/);
+    assert.match(el433.betanyc.alternative_route, /Kew Gardens-Union Tpke/);
+    assert.equal("alternative_route" in el433, false, "the inventory's alternate route is not beside MTA's outage fields");
     assert.match(acc.note, /can lag/);
     assert.match(acc.note, /mta\.info\/elevator-escalator-status/);
     assert.equal(acc.complex_outages, null, "F01 is not part of a complex");
@@ -632,9 +652,9 @@ test("with a stop_id, outage rows are placed by equipment ID and carry the inven
   assert.equal(f01.station_accessibility.status, "fully_accessible");
   assert.ok(f01.outages.length > 0);
   for (const o of f01.outages) {
-    assert.equal(o.matched_by, "equipment id");
-    assert.deepEqual(o.inventory.stop_ids, ["F01"]);
-    assert.equal(o.inventory.ada_compliant, "YES");
+    assert.equal(o.betanyc.matched_by, "equipment id");
+    assert.deepEqual(o.betanyc.inventory.stop_ids, ["F01"]);
+    assert.equal(o.betanyc.inventory.ada_compliant, "YES");
   }
   assert.match(f01.inventory_data.source_url, /94fv-bak7/);
   assert.match(f01.inventory_data.note, /can lag/);
@@ -647,25 +667,25 @@ test("the ID join drops name-only false positives and finds what names missed", 
   const unionSt = await call("get_accessibility_outages", { stop_id: "R32" });
   assert.equal(unionSt.outage_count, 0);
   assert.deepEqual(unionSt.other_station_outages.map((o) => o.station), ["14 St-Union Sq", "14 St-Union Sq"]);
-  assert.ok(unionSt.other_station_outages.every((o) => /places .* at 14 St-Union Sq/.test(o.match_note)));
+  assert.ok(unionSt.other_station_outages.every((o) => /places .* at 14 St-Union Sq/.test(o.betanyc.match_note)));
   assert.match(unionSt.no_match_note, /not proof the station is usable/);
   assert.match(unionSt.no_match_note, /not accessible/);
 
   // "168 St" in the feed was only ever found from A09. EL113 is coded to 112.
   const s112 = await call("get_accessibility_outages", { stop_id: "112" });
-  assert.deepEqual(s112.outages.map((o) => [o.equipment, o.matched_by]), [["EL113", "equipment id"]]);
+  assert.deepEqual(s112.outages.map((o) => [o.equipment, o.betanyc.matched_by]), [["EL113", "equipment id"]]);
   // A09 still lists it, because the feed names it, with where the inventory puts it.
   const a09 = await call("get_accessibility_outages", { stop_id: "A09" });
   const el113 = a09.outages.find((o) => o.equipment === "EL113");
-  assert.equal(el113.matched_by, "name");
-  assert.match(el113.match_note, /168 St-Washington Hts \(112\), another station in this complex/);
+  assert.equal(el113.betanyc.matched_by, "name");
+  assert.match(el113.betanyc.match_note, /168 St-Washington Hts \(112\), another station in this complex/);
 });
 
 test("outages elsewhere in a complex are listed apart, not dropped", async () => {
   // EL290X is "42St/Port Authority" in the feed and A27 in the inventory, in
   // the same complex as Times Sq-42 St (127).
   const times = await call("get_accessibility_outages", { stop_id: "127" });
-  assert.ok(times.complex_outages.some((o) => o.equipment === "EL290X" && o.matched_by === "equipment id"));
+  assert.ok(times.complex_outages.some((o) => o.equipment === "EL290X" && o.betanyc.matched_by === "equipment id"));
   assert.equal(times.outages.some((o) => o.equipment === "EL290X"), false);
   // A station outside any complex gets null, not an empty list.
   const f01 = await call("get_accessibility_outages", { stop_id: "F01" });
@@ -682,16 +702,16 @@ test("rows the inventory doesn't know fall back to names, and say so", async () 
   try {
     const wtc = await call("get_accessibility_outages", { stop_id: "138" });
     const row = wtc.outages.find((o) => o.equipment === "EL-NOT-IN-INVENTORY");
-    assert.equal(row.matched_by, "partial name");
-    assert.equal("inventory" in row, false, "no inventory entry, so the field is omitted");
-    assert.equal("match_note" in row, false, "138 is the closest name, so nothing to flag");
+    assert.equal(row.betanyc.matched_by, "partial name");
+    assert.equal("inventory" in row.betanyc, false, "no inventory entry, so the field is omitted");
+    assert.equal("match_note" in row.betanyc, false, "138 is the closest name, so nothing to flag");
 
     // Van Cortlandt Park-242 St also contains "Cortlandt" on the 1. It used to
     // lose the tie-break silently. Now it gets the row, flagged.
     const van = await call("get_accessibility_outages", { stop_id: "101" });
     const flagged = van.outages.find((o) => o.equipment === "EL-NOT-IN-INVENTORY");
-    assert.equal(flagged.matched_by, "partial name");
-    assert.match(flagged.match_note, /WTC Cortlandt \(138\).*matches 'Cortlandt St' more closely/);
+    assert.equal(flagged.betanyc.matched_by, "partial name");
+    assert.match(flagged.betanyc.match_note, /WTC Cortlandt \(138\).*matches 'Cortlandt St' more closely/);
   } finally {
     eneCurrentBody = ENE_CURRENT;
     await callTool("get_accessibility_outages", {});
@@ -702,9 +722,9 @@ test("rows the inventory doesn't know fall back to names, and say so", async () 
 
 test("a free-text station search tags rows as name matches and shows the inventory's station", async () => {
   const byName = await call("get_accessibility_outages", { station: "125 St", date: SAT });
-  assert.ok(byName.outages.every((o) => o.matched_by === "name"));
+  assert.ok(byName.outages.every((o) => o.betanyc.matched_by === "name"));
   assert.deepEqual(
-    byName.outages.map((o) => [o.equipment, o.inventory.stop_ids]).sort(),
+    byName.outages.map((o) => [o.equipment, o.betanyc.inventory.stop_ids]).sort(),
     [["EL144", ["A15"]], ["ES102", ["116"]]]
   );
   assert.equal(byName.station_accessibility, null);
@@ -730,19 +750,36 @@ test("a not-accessible station with ADA elevators isn't told it may have none", 
   assert.match(route.accessibility_outages.note, /not proof the station is usable/);
 });
 
-test("unfiltered and route-only answers carry no inventory and no null extras", async () => {
+test("unfiltered and route-only answers carry no betanyc object and no null extras", async () => {
   for (const args of [{}, { route_id: "6" }]) {
     const result = await call("get_accessibility_outages", args);
     assert.ok(result.outages.length > 0);
-    for (const o of result.outages) {
-      assert.equal("inventory" in o, false);
-      assert.equal("matched_by" in o, false);
-      assert.equal("match_note" in o, false);
-    }
+    for (const o of result.outages) assert.equal("betanyc" in o, false, "nothing BetaNYC added, so no object");
   }
   // With a station, the inventory is there.
   const byName = await call("get_accessibility_outages", { station: "Jamaica-179 St", upcoming: true });
-  assert.ok(byName.outages.every((o) => o.inventory && o.matched_by === "name"));
+  assert.ok(byName.outages.every((o) => o.betanyc.inventory && o.betanyc.matched_by === "name"));
+});
+
+test("BetaNYC's additions to an outage row sit in a `betanyc` object, apart from MTA's fields", async () => {
+  // Same rule as the alerts: MTA's row keeps MTA's fields and values; what BetaNYC adds
+  // (how the row was placed, the note, the inventory's details) is nested.
+  const OURS = ["matched_by", "match_note", "inventory", "alternative_route", "date_caveat"];
+  const byId = await call("get_accessibility_outages", { stop_id: "F01" });
+  const byName = await call("get_accessibility_outages", { station: "125 St", date: SAT });
+  const rows = [...byId.outages, ...(byId.complex_outages ?? []), ...byId.other_station_outages, ...byName.outages];
+  assert.ok(rows.length > 0);
+  for (const o of rows) {
+    for (const k of OURS) assert.equal(k in o, false, `${k} is not beside MTA's fields`);
+    assert.ok("equipment" in o, "MTA's own fields stay at the top level");
+    assert.ok(o.betanyc && ("matched_by" in o.betanyc || "match_note" in o.betanyc), o.equipment);
+  }
+  const route = await call("check_route_on_date", { route_id: "F", date: SAT, stop_id: "F01", include_accessibility: true });
+  for (const o of route.accessibility_outages.outages) {
+    for (const k of OURS) assert.equal(k in o, false, `${k} is not beside MTA's fields (check_route_on_date)`);
+    assert.ok(o.betanyc && ("matched_by" in o.betanyc || "match_note" in o.betanyc), o.equipment);
+  }
+  assert.match(TOOLS.find((t) => t.name === "get_accessibility_outages").description, /`betanyc`/);
 });
 
 // ─── Alerts with no active_period ────────────────────────────────────────────
@@ -795,8 +832,8 @@ test("an alert_type this server has never seen counts as a disruption", async ()
   alertsBody = mutated;
   try {
     const routeLevel = await call("check_route_on_date", { route_id: "6", date: SAT });
-    assert.equal(routeLevel.alerts[0].effect, "unknown");
-    assert.equal(routeLevel.alerts[0].alert_type_recognized, false);
+    assert.equal(routeLevel.alerts[0].betanyc.effect, "unknown");
+    assert.equal(routeLevel.alerts[0].betanyc.alert_type_recognized, false);
     assert.equal(routeLevel.disrupted, true);
     assert.deepEqual(routeLevel.unknown_alert_types, ["Planned - Something MTA Invented In 2027"]);
 
@@ -808,8 +845,8 @@ test("an alert_type this server has never seen counts as a disruption", async ()
       date: SAT,
       station: "68 St-Hunter College",
     });
-    assert.equal(atStation.alerts[0].affects_this_station, false);
-    assert.equal(atStation.alerts[0].relevant_to_station, true);
+    assert.equal(atStation.alerts[0].betanyc.affects_this_station, false);
+    assert.equal(atStation.alerts[0].betanyc.relevant_to_station, true);
     assert.equal(
       atStation.disrupted,
       true,
@@ -863,12 +900,13 @@ test("routesByParentStation folds platform rows up to the station", () => {
 
 // ─── Schema surface ──────────────────────────────────────────────────────────
 
-test("six tools are advertised, with the names the docs use", () => {
-  // The four MTA tools, plus whats_changed and about_betanyc (the BetaNYC standard tools).
+test("seven tools are advertised, with the names the docs use", () => {
+  // The four MTA tools, plus whats_changed, about_betanyc and about_data (the BetaNYC standard tools).
   assert.deepEqual(
     TOOLS.map((t) => t.name).sort(),
     [
       "about_betanyc",
+      "about_data",
       "check_route_on_date",
       "get_accessibility_outages",
       "get_service_alerts",

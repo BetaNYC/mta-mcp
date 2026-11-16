@@ -102,20 +102,23 @@ test("about_betanyc names the server, its version, and where to report a bug or 
   assert.match(textOf(bad), /takes no parameters/);
 });
 
-test("over stdio, the SDK client accepts both answers against their output schemas", async () => {
+test("over stdio, the SDK client accepts the shared answers against their output schemas", async () => {
   // Client.callTool validates structuredContent against the outputSchema from tools/list
   // and throws when it does not match, so this is the MCP contract checked end to end.
-  // Neither call reaches MTA; the server makes a request only for the four MTA tools.
+  // None of these calls reaches MTA; the server makes a request only for the four MTA tools.
   const transport = new StdioClientTransport({ command: process.execPath, args: ["dist/index.js"], stderr: "ignore" });
   const client = new Client({ name: "betanyc-tools-test", version: "0" });
   await client.connect(transport);
   try {
     const { tools } = await client.listTools();
-    assert.equal(tools.length, 6);
+    assert.equal(tools.length, 7);
     const wc = await client.callTool({ name: "whats_changed", arguments: { limit: 3 } });
     assert.equal(wc.structuredContent.returned, 3);
     const about = await client.callTool({ name: "about_betanyc", arguments: {} });
     assert.equal(about.structuredContent.server.version, pkg.version);
+    const data = await client.callTool({ name: "about_data", arguments: {} });
+    assert.equal(data.structuredContent.contact_email, "lab@beta.nyc");
+    assert.match(client.getInstructions() ?? "", /about_data/, "the server's instructions say when to call about_data");
   } finally {
     await client.close();
   }

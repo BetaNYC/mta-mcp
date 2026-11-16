@@ -28,7 +28,8 @@
 # package is private and is never published. See docs/terms-compliance.md. The
 # What's changed release gate (`whats_changed.py check --release`) is therefore
 # a step in the PR's last commit (CONTRIBUTING.md, "Releases"), and the
-# whats-changed-released job below runs it on every push to main.
+# whats-changed-released job below runs it on every push to main, together with
+# the about-data release gate (`about-data check --release`).
 
 name: CI
 
@@ -50,6 +51,8 @@ on:
       - ".github/workflows/**"
       - "WHATS-CHANGED.md"
       - "CHANGELOG.md"
+      - "DATA-SOURCES.json"
+      - "data.json"
       - "docs/**"
   push:
     branches: [main]
@@ -64,6 +67,8 @@ on:
       - ".github/workflows/**"
       - "WHATS-CHANGED.md"
       - "CHANGELOG.md"
+      - "DATA-SOURCES.json"
+      - "data.json"
       - "docs/**"
   # Manual trigger — a path-scoped pull_request/push event does not fire on the
   # very PR that introduces the workflow, so without this the gate would never
@@ -129,11 +134,65 @@ jobs:
           --into docs/whats-changed.html
           --repo-url https://github.com/BetaNYC/mta-mcp --check
 
+  # The about-data standard (betanyc-ai-workspace platform/system/about-data-standard.md § 7).
+  # scripts/whats_changed.py, scripts/tests/catalog_validate.py, scripts/mcp_shared/ and
+  # src/betanyc-tools.ts are copies of the workspace's canonical files: never edit them here.
+  # 1. DATA-SOURCES.json is valid and every tool the built server lists has a source.
+  # 2. data.json (DCAT-US 3.0) matches DATA-SOURCES.json; rebuild with the same command
+  #    without --check. 3. DATA-SOURCES.json against its JSON Schema and data.json against the
+  #    vendored DCAT-US 3.0 schema, with pinned validators (CI only, not runtime dependencies).
+  # Listing the tools imports dist/tools.js, which reads data/ and makes no request to MTA.
+  about-data:
+    name: About data
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: "npm"
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@v5
+
+      - name: Build
+        run: npm ci && npm run build
+
+      - name: The server's tool list
+        run: >-
+          node --input-type=module -e '
+          const { TOOLS } = await import("./dist/tools.js");
+          console.log(JSON.stringify(TOOLS.map((t) => t.name)));
+          ' > "$RUNNER_TEMP/tools.json"
+
+      - name: DATA-SOURCES.json is valid and explains every tool
+        run: python3 scripts/whats_changed.py about-data check DATA-SOURCES.json --tools-file "$RUNNER_TEMP/tools.json"
+
+      - name: data.json is current
+        run: python3 scripts/whats_changed.py about-data catalog DATA-SOURCES.json --check
+
+      - name: Validate against the JSON Schema and DCAT-US 3.0
+        run: |
+          uv run --no-project --with jsonschema==4.26.0 --with referencing==0.37.0 --with rfc3987==1.3.8 \
+            python scripts/tests/catalog_validate.py data-sources DATA-SOURCES.json
+          uv run --no-project --with jsonschema==4.26.0 --with referencing==0.37.0 --with rfc3987==1.3.8 \
+            python scripts/tests/catalog_validate.py dcat data.json
+
   # Release day is merge day here: people build whatever is on main, so an entry that reaches
   # main still headed "## Unreleased:" is a release without a date. The PR's last commit before
   # merge dates it (CONTRIBUTING.md, "Releases"). This job runs only on pushes to main and fails
   # loudly if that step was missed, so the gap is visible at once. Fix it with a follow-up PR
-  # that dates the entry and the CHANGELOG heading.
+  # that dates the entry and the CHANGELOG heading. The same job runs the about-data release
+  # gate: DATA-SOURCES.json has no error, every tool has a source, and the contact address is
+  # real (not the placeholder).
   whats-changed-released:
     name: What's changed on main is dated
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -149,3 +208,18 @@ jobs:
 
       - name: WHATS-CHANGED.md has no Unreleased entry
         run: python3 scripts/whats_changed.py check WHATS-CHANGED.md --release
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22.x"
+          cache: "npm"
+
+      - name: "Release gate: DATA-SOURCES.json is valid and names a real contact"
+        run: |
+          npm ci && npm run build
+          node --input-type=module -e '
+          const { TOOLS } = await import("./dist/tools.js");
+          console.log(JSON.stringify(TOOLS.map((t) => t.name)));
+          ' > "$RUNNER_TEMP/tools.json"
+          python3 scripts/whats_changed.py about-data check DATA-SOURCES.json --release --tools-file "$RUNNER_TEMP/tools.json"

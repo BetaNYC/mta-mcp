@@ -3,6 +3,10 @@
 Every piece of data this server uses, where it comes from, what it gives us,
 how the pieces join, the terms each comes under, and how to refresh it.
 
+The same facts, source by source, are in [DATA-SOURCES.json](../DATA-SOURCES.json),
+which the `about_data` tool answers from, and in `data.json`, a DCAT-US 3.0
+catalog built from it.
+
 There are two kinds. Two MTA feeds, served from three URLs, are read live when
 a tool is called. Three snapshots are bundled in `data/` and read from disk, so
 they never cost a network request at runtime.

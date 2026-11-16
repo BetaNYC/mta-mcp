@@ -44,22 +44,33 @@ import {
   todayIso,
   VERSION,
 } from "./mta.js";
-import { type SnapshotName, snapshotFooter, stationListHint } from "./freshness.js";
+import { type SnapshotName, SNAPSHOTS, snapshotFooter, stationListHint } from "./freshness.js";
 import { createBetanycTools } from "./betanyc-tools.js";
 
 /**
- * whats_changed and about_betanyc, the two tools BetaNYC is adding to each of its MCP servers
- * (betanyc-ai-workspace platform/system/whats-changed-standard.md § 7). betanyc-tools.ts is
- * a copy of the workspace's canonical file: never edit it here. This server is not on npm and
- * runs from a local build, so WHATS-CHANGED.md is read from the repository root, one level
- * above dist/. Neither tool makes a network request.
+ * whats_changed, about_betanyc and about_data, the three tools BetaNYC is adding to each of its
+ * MCP servers (betanyc-ai-workspace platform/system/whats-changed-standard.md § 7 and
+ * about-data-standard.md). betanyc-tools.ts is a copy of the workspace's canonical file: never
+ * edit it here. This server is not on npm and runs from a local build, so WHATS-CHANGED.md and
+ * DATA-SOURCES.json are read from the repository root, one level above dist/. None of the three
+ * makes a network request.
+ *
+ * about_data's freshness: the two MTA feeds are "live" (read when a tool is called). The three
+ * bundled snapshots answer with the same pull times the tools report in snapshot_as_of
+ * (src/freshness.ts), read from the files in data/ that the update scripts write.
  */
-const betanyc = createBetanycTools({
+export const betanyc = createBetanycTools({
   serverName: "mta-mcp",
   version: VERSION,
   repoUrl: "https://github.com/BetaNYC/mta-mcp",
   whatsChangedPath: new URL("../WHATS-CHANGED.md", import.meta.url),
   pageUrl: "https://betanyc.github.io/mta-mcp/whats-changed.html",
+  dataSourcesPath: new URL("../DATA-SOURCES.json", import.meta.url),
+  freshness: {
+    stations_pulled: () => SNAPSHOTS.stations.asOf() ?? null,
+    station_ada_pulled: () => SNAPSHOTS.station_ada.asOf() ?? null,
+    equipment_pulled: () => SNAPSHOTS.equipment.asOf() ?? null,
+  },
 });
 
 const EFFECTS = [
@@ -76,7 +87,7 @@ export const TOOLS = [
   {
     name: "check_route_on_date",
     description:
-      "Is a subway route disrupted on a given date, optionally at one station? Dates are interpreted in America/New_York. Answers from MTA's service-alert feed. A station that only GAINS service (an express train running local) is reported as affected but NOT disrupted. Station-level absence is not absence of impact — read station_level_detail before treating disrupted:false as a guarantee. The station carries MTA's ADA status; elevator outages are included only with include_accessibility:true. Station names and ADA status come from local snapshots the user must refresh; snapshot_as_of gives their dates and snapshot_warning flags old ones.",
+      "Is a subway route disrupted on a given date, optionally at one station? Dates are interpreted in America/New_York. Answers from MTA's service-alert feed. A station that only GAINS service (an express train running local) is reported as affected but NOT disrupted. Station-level absence is not absence of impact — read station_level_detail before treating disrupted:false as a guarantee. The station carries MTA's ADA status; elevator outages are included only with include_accessibility:true. Each alert's own fields are MTA's; BetaNYC's reading of it (effect, counts_as_disruption, planned, alert_type_recognized, and whether it bears on the station) is in its `betanyc` object, and disrupted is BetaNYC's answer from those, not MTA's. Station names and ADA status come from local snapshots the user must refresh; snapshot_as_of gives their dates and snapshot_warning flags old ones.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -107,7 +118,7 @@ export const TOOLS = [
   {
     name: "get_service_alerts",
     description:
-      "List MTA subway service alerts active on a date, with optional filters. Defaults to today in America/New_York. Use this for open-ended questions like what is happening on a line this weekend. Stop names come from a local station snapshot the user must refresh; see snapshot_as_of and snapshot_warning.",
+      "List MTA subway service alerts active on a date, with optional filters. Defaults to today in America/New_York. Use this for open-ended questions like what is happening on a line this weekend. Each alert's own fields are MTA's; BetaNYC's reading of it (effect, counts_as_disruption, planned, alert_type_recognized) is in its `betanyc` object, and disrupting_alert_count counts those. Stop names come from a local station snapshot the user must refresh; see snapshot_as_of and snapshot_warning.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -156,7 +167,7 @@ export const TOOLS = [
   {
     name: "get_accessibility_outages",
     description:
-      "Elevator and escalator outages in the subway: in effect now, scheduled, or overlapping one date, with MTA's alternate route for each elevator. With stop_id, rows are placed by equipment ID using MTA's equipment inventory, with name matching as a fallback; each row's matched_by says which. Zero matches is not proof of no outage, and no outage is not proof a station is usable; read no_match_note and station_accessibility. Equipment locations, alternate routes, and ADA status come from local snapshots the user must refresh; snapshot_as_of gives their dates and snapshot_warning flags old ones.",
+      "Elevator and escalator outages in the subway: in effect now, scheduled, or overlapping one date, with MTA's alternate route for each elevator. With stop_id, rows are placed by equipment ID using MTA's equipment inventory, with name matching as a fallback. Each row's own fields are MTA's; what BetaNYC adds (matched_by, which says how the row was placed, match_note, and the inventory's details for that equipment) is in its `betanyc` object. Zero matches is not proof of no outage, and no outage is not proof a station is usable; read no_match_note and station_accessibility. Equipment locations, alternate routes, and ADA status come from local snapshots the user must refresh; snapshot_as_of gives their dates and snapshot_warning flags old ones.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -282,7 +293,14 @@ function entitiesForRoute(alert: Alert, routeId: string): InformedEntity[] {
 const isPlannedWork = (entityId: string | undefined): boolean =>
   (entityId ?? "").startsWith("lmm:planned_work:");
 
-/** Shape one alert for output. `affected_stops` comes from informed_entity only. */
+/**
+ * Shape one alert for output. `affected_stops` comes from informed_entity only.
+ *
+ * MTA's fields stay at the top level, with their values as MTA gives them (the text in the
+ * English version where MTA gives one). What BetaNYC works out from them goes in `betanyc`, so
+ * a reader can tell the two apart: MTA's terms (term 5) say "You will not modify or delete any
+ * of the data", and these readings are BetaNYC's, not MTA's. See docs/terms-compliance.md.
+ */
 function shapeAlert(entity: AlertEntity, routeIds: string[] | null) {
   const alert = entity.alert ?? {};
   const mercury = alert["transit_realtime.mercury_alert"];
@@ -300,16 +318,18 @@ function shapeAlert(entity: AlertEntity, routeIds: string[] | null) {
   return {
     entity_id: entity.id ?? null,
     alert_type: alertType ?? null,
-    alert_type_recognized: isKnownAlertType(alertType),
-    effect,
-    counts_as_disruption: isDisrupting(effect),
-    planned: isPlannedWork(entity.id),
     routes: [...new Set((alert.informed_entity ?? []).map((e) => e.route_id).filter(Boolean))],
     header_text: englishText(alert.header_text),
     description_text: englishText(alert.description_text),
     human_readable_active_period: englishText(mercury?.human_readable_active_period),
     affected_stops: stops,
     active_periods: alert.active_period ?? [],
+    betanyc: {
+      effect,
+      counts_as_disruption: isDisrupting(effect),
+      planned: isPlannedWork(entity.id),
+      alert_type_recognized: isKnownAlertType(alertType),
+    },
   };
 }
 
@@ -375,28 +395,32 @@ async function checkRouteOnDate(args: {
     const taggedStops = routeEntities.filter((e) => e.stop_id).map((e) => e.stop_id);
     const hasStationDetail = taggedStops.length > 0;
     const tagsThisStation = station ? taggedStops.includes(station.stop_id) : false;
+    const base = shapeAlert(entity, [args.route_id]);
     return {
-      ...shapeAlert(entity, [args.route_id]),
-      // No station asked about → the question does not apply.
-      affects_this_station: station ? tagsThisStation : null,
+      ...base,
+      betanyc: {
+        ...base.betanyc,
+        // No station asked about → the question does not apply.
+        affects_this_station: station ? tagsThisStation : null,
       // Three ways an alert bears on a specific station: MTA named it; MTA
       // named no stations at all (so the alert is route-wide as far as we
       // know); or the alert_type is one we do not recognize, in which case we
       // cannot claim to know what its station tagging means either. Fail
       // toward caution on all three.
-      relevant_to_station: station
-        ? tagsThisStation || !hasStationDetail || effectFor(alertType) === "unknown"
-        : true,
-      station_level_detail: hasStationDetail,
+        relevant_to_station: station
+          ? tagsThisStation || !hasStationDetail || effectFor(alertType) === "unknown"
+          : true,
+        station_level_detail: hasStationDetail,
+      },
     };
   });
 
-  const considered = station ? shaped.filter((a) => a.relevant_to_station) : shaped;
-  const disrupted = considered.some((a) => a.counts_as_disruption);
-  const stationLevelDetail = shaped.length > 0 && shaped.every((a) => a.station_level_detail);
+  const considered = station ? shaped.filter((a) => a.betanyc.relevant_to_station) : shaped;
+  const disrupted = considered.some((a) => a.betanyc.counts_as_disruption);
+  const stationLevelDetail = shaped.length > 0 && shaped.every((a) => a.betanyc.station_level_detail);
 
   const unknownAlertTypes = [
-    ...new Set(shaped.filter((a) => !a.alert_type_recognized).map((a) => a.alert_type)),
+    ...new Set(shaped.filter((a) => !a.betanyc.alert_type_recognized).map((a) => a.alert_type)),
   ];
 
   // Opt-in only, and only once a station is known. One request to the current
@@ -508,9 +532,9 @@ async function getServiceAlerts(args: {
       effect: args.effect ?? null,
     },
     alert_count: shaped.length,
-    disrupting_alert_count: shaped.filter((a) => a.counts_as_disruption).length,
+    disrupting_alert_count: shaped.filter((a) => a.betanyc.counts_as_disruption).length,
     unknown_alert_types: [
-      ...new Set(shaped.filter((a) => !a.alert_type_recognized).map((a) => a.alert_type)),
+      ...new Set(shaped.filter((a) => !a.betanyc.alert_type_recognized).map((a) => a.alert_type)),
     ],
     known_alert_types: Object.keys(EFFECT_BY_ALERT_TYPE),
     alerts: shaped,
@@ -566,14 +590,18 @@ type InventoryInfo = {
   alternative_route: string | null;
 };
 
-// Our fields are omitted, not null, when they have nothing to say, and
+// MTA's row keeps MTA's fields and values. What BetaNYC adds goes in `betanyc`,
+// apart from them (MTA's terms, term 5; see docs/terms-compliance.md), the same
+// way as on service alerts. Our fields are omitted, not null, when they have
+// nothing to say, and `betanyc` itself is omitted when it would be empty.
 // `inventory` comes only with a station filter. A route-wide or unfiltered
 // answer is the big one, and it has no station to route around anyway.
-export type ShapedOutage = EneOutage & {
+export type OutageAdditions = {
   matched_by?: MatchedBy;
   match_note?: string;
   inventory?: InventoryInfo;
 };
+export type ShapedOutage = EneOutage & { betanyc?: OutageAdditions };
 
 /** What the inventory adds to an outage row, or null if it has no such code. */
 function inventoryInfo(row: EneOutage): InventoryInfo | null {
@@ -587,19 +615,19 @@ function inventoryInfo(row: EneOutage): InventoryInfo | null {
   };
 }
 
-/** MTA's row unchanged, plus whichever of our three fields apply. */
+/** MTA's row unchanged, plus whichever of our three fields apply, in `betanyc`. */
 function shapeOutage(
   row: EneOutage,
   matchedBy: MatchedBy | null,
   note: string | null = null,
   withInventory = true
 ): ShapedOutage {
-  const out: ShapedOutage = { ...row };
-  if (matchedBy) out.matched_by = matchedBy;
-  if (note) out.match_note = note;
+  const ours: OutageAdditions = {};
+  if (matchedBy) ours.matched_by = matchedBy;
+  if (note) ours.match_note = note;
   const inventory = withInventory ? inventoryInfo(row) : null;
-  if (inventory) out.inventory = inventory;
-  return out;
+  if (inventory) ours.inventory = inventory;
+  return Object.keys(ours).length > 0 ? { ...row, betanyc: ours } : { ...row };
 }
 
 const describeStops = (ids: string[]): string =>
@@ -713,7 +741,7 @@ function placeAtStation(rows: EneOutage[], station: Station): Placement {
 
   here.sort(
     (a, b) =>
-      (MATCH_RANK[a.row.matched_by ?? ""] ?? 3) - (MATCH_RANK[b.row.matched_by ?? ""] ?? 3) ||
+      (MATCH_RANK[a.row.betanyc?.matched_by ?? ""] ?? 3) - (MATCH_RANK[b.row.betanyc?.matched_by ?? ""] ?? 3) ||
       b.score - a.score
   );
   return { outages: here.map((h) => h.row), complex, other, withoutStation };
@@ -922,10 +950,13 @@ function compactOutage(row: ShapedOutage, caveat: EneDateCaveat | undefined) {
     estimatedreturntoservice: row.estimatedreturntoservice ?? null,
     reason: row.reason ?? null,
   };
-  if (row.matched_by) out.matched_by = row.matched_by;
-  if (row.match_note) out.match_note = row.match_note;
-  if (row.inventory?.alternative_route) out.alternative_route = row.inventory.alternative_route;
-  if (caveat) out.date_caveat = caveat;
+  // BetaNYC's additions, apart from MTA's fields, as in the full rows.
+  const ours: Record<string, unknown> = {};
+  if (row.betanyc?.matched_by) ours.matched_by = row.betanyc.matched_by;
+  if (row.betanyc?.match_note) ours.match_note = row.betanyc.match_note;
+  if (row.betanyc?.inventory?.alternative_route) ours.alternative_route = row.betanyc.inventory.alternative_route;
+  if (caveat) ours.date_caveat = caveat;
+  if (Object.keys(ours).length > 0) out.betanyc = ours;
   return out;
 }
 
@@ -1035,6 +1066,7 @@ function noMatchNote(
 
 export async function callTool(name: string, args: unknown) {
   // The shared tools answer in plain text plus structuredContent; they never touch MTA.
+  // Every freshness hook is synchronous, so the sync call is enough.
   if (betanyc.handles(name)) return betanyc.call(name, args);
   try {
     switch (name) {
