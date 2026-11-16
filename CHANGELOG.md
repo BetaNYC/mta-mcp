@@ -57,8 +57,14 @@ shape** (see Changed). Tracking: BetaNYC/betanyc-ai-workspace#1655 (epic #1652).
   The answer-level `matched_by` that explains how rows were placed stays where it was.
   `docs/accessibility.md` updated too.
 - `docs/terms-compliance.md`: a fourth obligation, "Not modifying the data" (term 5).
-- `src/betanyc-tools.ts` and `scripts/whats_changed.py` updated to shared module 1.3.7
-  (from 1.2.4), copied unchanged.
+- `src/betanyc-tools.ts`, `scripts/whats_changed.py`, `scripts/mcp_shared/data-sources.schema.json`
+  and `scripts/tests/catalog_validate.py` updated to shared module 1.4.0 (from 1.2.4), copied
+  unchanged (BetaNYC/betanyc-ai-workspace#1672). `about_data` gives each source one of three
+  answers on whether it is official, naming the source, its publisher and a link. Every MTA
+  source here reads "BetaNYC modified this data", because BetaNYC filters, merges or reshapes
+  each one. `DATA-SOURCES.json`: the two data.ny.gov sources are named by their own titles,
+  "MTA Subway Stations" and "MTA Subway Elevator and Escalator Asset Inventory", without the
+  dataset id.
 
 ## [0.2.0] — 2026-11-12
 

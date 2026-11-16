@@ -121,8 +121,8 @@
     {
       "@id": "https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f",
       "@type": "Dataset",
-      "title": "MTA Subway Stations (data.ny.gov dataset 39hk-dx4f)",
-      "description": "MTA Subway Stations (data.ny.gov dataset 39hk-dx4f), published by Metropolitan Transportation Authority.",
+      "title": "MTA Subway Stations",
+      "description": "MTA Subway Stations, published by Metropolitan Transportation Authority.",
       "identifier": "https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f",
       "contactPoint": {
         "@type": "Kind",
@@ -136,7 +136,7 @@
       },
       "landingPage": {
         "@type": "Document",
-        "title": "MTA Subway Stations (data.ny.gov dataset 39hk-dx4f)",
+        "title": "MTA Subway Stations",
         "accessURL": "https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f"
       },
       "page": [
@@ -155,8 +155,8 @@
     {
       "@id": "https://data.ny.gov/Transportation/MTA-Subway-Elevator-and-Escalator-Asset-Inventory/94fv-bak7",
       "@type": "Dataset",
-      "title": "MTA Subway Elevator and Escalator Asset Inventory (data.ny.gov dataset 94fv-bak7)",
-      "description": "MTA Subway Elevator and Escalator Asset Inventory (data.ny.gov dataset 94fv-bak7), published by Metropolitan Transportation Authority.",
+      "title": "MTA Subway Elevator and Escalator Asset Inventory",
+      "description": "MTA Subway Elevator and Escalator Asset Inventory, published by Metropolitan Transportation Authority.",
       "identifier": "https://data.ny.gov/Transportation/MTA-Subway-Elevator-and-Escalator-Asset-Inventory/94fv-bak7",
       "contactPoint": {
         "@type": "Kind",
@@ -170,7 +170,7 @@
       },
       "landingPage": {
         "@type": "Document",
-        "title": "MTA Subway Elevator and Escalator Asset Inventory (data.ny.gov dataset 94fv-bak7)",
+        "title": "MTA Subway Elevator and Escalator Asset Inventory",
         "accessURL": "https://data.ny.gov/Transportation/MTA-Subway-Elevator-and-Escalator-Asset-Inventory/94fv-bak7"
       },
       "page": [
@@ -194,7 +194,7 @@
       "identifier": "https://github.com/BetaNYC/mta-mcp/blob/HEAD/DATA-SOURCES.json#service-alerts",
       "contactPoint": {
         "@type": "Kind",
-        "fn": "BetaNYC (serves this dataset; report errors in this data to BetaNYC: https://github.com/BetaNYC/mta-mcp/issues; errors in the original records to Metropolitan Transportation Authority: https://groups.google.com/g/mtadeveloperresources)",
+        "fn": "BetaNYC (serves this dataset; report errors in the data to BetaNYC: https://github.com/BetaNYC/mta-mcp/issues; errors in the original records to Metropolitan Transportation Authority: https://groups.google.com/g/mtadeveloperresources)",
         "hasEmail": "mailto:lab@beta.nyc"
       },
       "publisher": {
@@ -245,9 +245,9 @@
         }
       ],
       "provenance": [
-        "Official source: yes. This data is BetaNYC's, derived from it, not an official Metropolitan Transportation Authority record.",
+        "BetaNYC modified this data: left some records out, left some fields out, joined it with other data, and counted or added up records. This copy should not be considered the official record. Official record: MTA subway service alerts feed (GTFS-realtime, JSON) (Metropolitan Transportation Authority), https://api.mta.info/#/serviceAlerts",
         "Read-only requests to MTA's public feed when a tool is called, with no API key. Each response is kept in memory for up to 60 seconds, so an answer can lag the feed by about a minute.",
-        "Changed by BetaNYC: BetaNYC uses part of the feed: each answer keeps the alerts for the route, date or station asked about, and the English text where MTA gives one (MTA's terms allow an app to use some but not all of the data). It adds stop names from the station list (topic stations), and check_route_on_date can add the station's accessibility status and elevator outages. Next to MTA's fields, in a separate betanyc object on each alert, BetaNYC adds its own reading: an effect from MTA's alert type, whether it counts as a disruption, and whether it is planned work. check_route_on_date gives a yes-or-no answer from that reading, and get_service_alerts counts the alerts it reads as disruptions. These are BetaNYC's, not MTA's data. MTA's own values are passed on unaltered."
+        "Modified by BetaNYC: BetaNYC uses part of the feed: each answer keeps the alerts for the route, date or station asked about, and the English text where MTA gives one (MTA's terms allow an app to use some but not all of the data). It adds stop names from the station list (topic stations), and check_route_on_date can add the station's accessibility status and elevator outages. Next to MTA's fields, in a separate betanyc object on each alert, BetaNYC adds its own reading: an effect from MTA's alert type, whether it counts as a disruption, and whether it is planned work. check_route_on_date gives a yes-or-no answer from that reading, and get_service_alerts counts the alerts it reads as disruptions. These are BetaNYC's, not MTA's data. MTA's own values are passed on unaltered."
       ],
       "page": [
         {
@@ -297,7 +297,7 @@
       "identifier": "https://github.com/BetaNYC/mta-mcp/blob/HEAD/DATA-SOURCES.json#elevator-outages",
       "contactPoint": {
         "@type": "Kind",
-        "fn": "BetaNYC (serves this dataset; report errors in this data to BetaNYC: https://github.com/BetaNYC/mta-mcp/issues; errors in the original records to Metropolitan Transportation Authority: https://groups.google.com/g/mtadeveloperresources)",
+        "fn": "BetaNYC (serves this dataset; report errors in the data to BetaNYC: https://github.com/BetaNYC/mta-mcp/issues; errors in the original records to Metropolitan Transportation Authority: https://groups.google.com/g/mtadeveloperresources)",
         "hasEmail": "mailto:lab@beta.nyc"
       },
       "publisher": {
@@ -348,9 +348,9 @@
         }
       ],
       "provenance": [
-        "Official source: yes. This data is BetaNYC's, derived from it, not an official Metropolitan Transportation Authority record.",
+        "BetaNYC modified this data: left some records out, joined it with other data, and matched addresses to places. This copy should not be considered the official record. Official record: MTA elevator and escalator outage feeds (current and upcoming) (Metropolitan Transportation Authority), https://api.mta.info/#/EAndEFeeds",
         "Read-only requests to MTA's public feeds when a tool is called, with no API key. Each response is kept in memory for up to 60 seconds.",
-        "Changed by BetaNYC: BetaNYC uses part of the feed: each answer keeps the outages for the station, line or date asked about (MTA's terms allow an app to use some but not all of the data). In a separate betanyc object on each row, BetaNYC adds the station the outage is placed at, found by joining MTA's equipment number to MTA's elevator inventory (topic elevator-inventory) or, when that fails, by matching MTA's station name; how it was matched; a note when the evidence is mixed; and the inventory's details for that equipment, including MTA's alternate route. These are BetaNYC's additions, not MTA's data. MTA's own values are passed on unaltered."
+        "Modified by BetaNYC: BetaNYC uses part of the feed: each answer keeps the outages for the station, line or date asked about (MTA's terms allow an app to use some but not all of the data). In a separate betanyc object on each row, BetaNYC adds the station the outage is placed at, found by joining MTA's equipment number to MTA's elevator inventory (topic elevator-inventory) or, when that fails, by matching MTA's station name; how it was matched; a note when the evidence is mixed; and the inventory's details for that equipment, including MTA's alternate route. These are BetaNYC's additions, not MTA's data. MTA's own values are passed on unaltered."
       ],
       "page": [
         {
@@ -396,7 +396,7 @@
       "identifier": "https://github.com/BetaNYC/mta-mcp/blob/HEAD/DATA-SOURCES.json#stations",
       "contactPoint": {
         "@type": "Kind",
-        "fn": "BetaNYC (serves this dataset; report errors in this data to BetaNYC: https://github.com/BetaNYC/mta-mcp/issues; errors in the original records to Metropolitan Transportation Authority: https://groups.google.com/g/mtadeveloperresources)",
+        "fn": "BetaNYC (serves this dataset; report errors in the data to BetaNYC: https://github.com/BetaNYC/mta-mcp/issues; errors in the original records to Metropolitan Transportation Authority: https://groups.google.com/g/mtadeveloperresources)",
         "hasEmail": "mailto:lab@beta.nyc"
       },
       "publisher": {
@@ -447,9 +447,9 @@
         }
       ],
       "provenance": [
-        "Official source: yes. This data is BetaNYC's, derived from it, not an official Metropolitan Transportation Authority record.",
+        "BetaNYC modified this data: left some records out, joined it with other data, and reshaped it. This copy should not be considered the official record. Official record: MTA regular subway GTFS (static schedule data) (Metropolitan Transportation Authority), https://rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip",
         "A dated copy kept in the repository as data/stations.json, built from MTA's GTFS file by scripts/update-stations.mjs (npm run stations). The server never downloads it; whoever runs the server refreshes it by hand.",
-        "Changed by BetaNYC: Only parent stations are kept (location_type 1), with their id, name and location. The routes serving each station are worked out by joining the GTFS trips and stop times."
+        "Modified by BetaNYC: Only parent stations are kept (location_type 1), with their id, name and location. The routes serving each station are worked out by joining the GTFS trips and stop times."
       ],
       "page": [
         {
@@ -492,7 +492,7 @@
       "identifier": "https://github.com/BetaNYC/mta-mcp/blob/HEAD/DATA-SOURCES.json#station-accessibility",
       "contactPoint": {
         "@type": "Kind",
-        "fn": "BetaNYC (serves this dataset; report errors in the data to Metropolitan Transportation Authority: https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f; errors in this server: https://github.com/BetaNYC/mta-mcp/issues)",
+        "fn": "BetaNYC (serves this dataset; report errors in the data to BetaNYC: https://github.com/BetaNYC/mta-mcp/issues; errors in the original records to Metropolitan Transportation Authority: https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f)",
         "hasEmail": "mailto:lab@beta.nyc"
       },
       "publisher": {
@@ -510,8 +510,8 @@
         {
           "@id": "https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f",
           "@type": "Dataset",
-          "title": "MTA Subway Stations (data.ny.gov dataset 39hk-dx4f)",
-          "description": "MTA Subway Stations (data.ny.gov dataset 39hk-dx4f), published by Metropolitan Transportation Authority.",
+          "title": "MTA Subway Stations",
+          "description": "MTA Subway Stations, published by Metropolitan Transportation Authority.",
           "identifier": "https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f",
           "contactPoint": {
             "@type": "Kind",
@@ -525,7 +525,7 @@
           },
           "landingPage": {
             "@type": "Document",
-            "title": "MTA Subway Stations (data.ny.gov dataset 39hk-dx4f)",
+            "title": "MTA Subway Stations",
             "accessURL": "https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f"
           },
           "page": [
@@ -543,9 +543,9 @@
         }
       ],
       "provenance": [
-        "Official record: yes, reshaped by BetaNYC with some fields left out (values unchanged).",
+        "BetaNYC modified this data: reshaped it and left some fields out. This copy should not be considered the official record. Official record: MTA Subway Stations (Metropolitan Transportation Authority), https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f",
         "A dated copy kept in the repository as data/station_ada.json, pulled from the data.ny.gov API by scripts/update-accessibility-data.mjs (npm run accessibility-data). The server never downloads it; whoever runs the server refreshes it by hand.",
-        "Reshaped by BetaNYC, some fields left out (values unchanged): Only the ADA fields, direction labels and station ids are kept. Three fields are renamed (gtfs_stop_id to stop_id, station_id to station_mrn, complex_id to complex_mrn), numbers stored as text become numbers, and empty text becomes null. The ADA values are MTA's."
+        "Modified by BetaNYC: Only the ADA fields, direction labels and station ids are kept. Three fields are renamed (gtfs_stop_id to stop_id, station_id to station_mrn, complex_id to complex_mrn), numbers stored as text become numbers, and empty text becomes null. The ADA values are MTA's."
       ],
       "page": [
         {
@@ -584,7 +584,7 @@
       "identifier": "https://github.com/BetaNYC/mta-mcp/blob/HEAD/DATA-SOURCES.json#elevator-inventory",
       "contactPoint": {
         "@type": "Kind",
-        "fn": "BetaNYC (serves this dataset; report errors in this data to BetaNYC: https://github.com/BetaNYC/mta-mcp/issues; errors in the original records to Metropolitan Transportation Authority: https://data.ny.gov/Transportation/MTA-Subway-Elevator-and-Escalator-Asset-Inventory/94fv-bak7)",
+        "fn": "BetaNYC (serves this dataset; report errors in the data to BetaNYC: https://github.com/BetaNYC/mta-mcp/issues; errors in the original records to Metropolitan Transportation Authority: https://data.ny.gov/Transportation/MTA-Subway-Elevator-and-Escalator-Asset-Inventory/94fv-bak7)",
         "hasEmail": "mailto:lab@beta.nyc"
       },
       "publisher": {
@@ -602,8 +602,8 @@
         {
           "@id": "https://data.ny.gov/Transportation/MTA-Subway-Elevator-and-Escalator-Asset-Inventory/94fv-bak7",
           "@type": "Dataset",
-          "title": "MTA Subway Elevator and Escalator Asset Inventory (data.ny.gov dataset 94fv-bak7)",
-          "description": "MTA Subway Elevator and Escalator Asset Inventory (data.ny.gov dataset 94fv-bak7), published by Metropolitan Transportation Authority.",
+          "title": "MTA Subway Elevator and Escalator Asset Inventory",
+          "description": "MTA Subway Elevator and Escalator Asset Inventory, published by Metropolitan Transportation Authority.",
           "identifier": "https://data.ny.gov/Transportation/MTA-Subway-Elevator-and-Escalator-Asset-Inventory/94fv-bak7",
           "contactPoint": {
             "@type": "Kind",
@@ -617,7 +617,7 @@
           },
           "landingPage": {
             "@type": "Document",
-            "title": "MTA Subway Elevator and Escalator Asset Inventory (data.ny.gov dataset 94fv-bak7)",
+            "title": "MTA Subway Elevator and Escalator Asset Inventory",
             "accessURL": "https://data.ny.gov/Transportation/MTA-Subway-Elevator-and-Escalator-Asset-Inventory/94fv-bak7"
           },
           "page": [
@@ -635,9 +635,9 @@
         }
       ],
       "provenance": [
-        "Official source: yes. This data is BetaNYC's, derived from it, not an official Metropolitan Transportation Authority record.",
+        "BetaNYC modified this data: reshaped it, left some fields out, and joined it with other data. This copy should not be considered the official record. Official record: MTA Subway Elevator and Escalator Asset Inventory (Metropolitan Transportation Authority), https://data.ny.gov/Transportation/MTA-Subway-Elevator-and-Escalator-Asset-Inventory/94fv-bak7",
         "A dated copy kept in the repository as data/equipment.json, pulled from the data.ny.gov API by scripts/update-accessibility-data.mjs (npm run accessibility-data). The server never downloads it; whoever runs the server refreshes it by hand.",
-        "Changed by BetaNYC: Only the fields the server uses are kept, station numbers stored as text become numbers, and empty text becomes null. BetaNYC adds stop_ids, the GTFS stations each piece of equipment is at, by joining MTA's station number to the station accessibility data (topic station-accessibility)."
+        "Modified by BetaNYC: Only the fields the server uses are kept, station numbers stored as text become numbers, and empty text becomes null. BetaNYC adds stop_ids, the GTFS stations each piece of equipment is at, by joining MTA's station number to the station accessibility data (topic station-accessibility)."
       ],
       "page": [
         {

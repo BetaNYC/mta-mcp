@@ -195,7 +195,7 @@
       "id": "station-accessibility",
       "title": "Station accessibility status",
       "what": "MTA's station-level ADA status for each station (not accessible, fully accessible or partly accessible), by direction, with MTA's notes.",
-      "source_name": "MTA Subway Stations (data.ny.gov dataset 39hk-dx4f)",
+      "source_name": "MTA Subway Stations",
       "publisher": {
         "name": "Metropolitan Transportation Authority",
         "url": "https://www.mta.info/"
@@ -249,7 +249,7 @@
       "id": "elevator-inventory",
       "title": "Elevator and escalator inventory",
       "what": "Every subway elevator and escalator MTA lists: its equipment number, type, station, whether it is ADA compliant, MTA's notes, and MTA's directions for when it is out of service.",
-      "source_name": "MTA Subway Elevator and Escalator Asset Inventory (data.ny.gov dataset 94fv-bak7)",
+      "source_name": "MTA Subway Elevator and Escalator Asset Inventory",
       "publisher": {
         "name": "Metropolitan Transportation Authority",
         "url": "https://www.mta.info/"

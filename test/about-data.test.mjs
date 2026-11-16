@@ -73,11 +73,11 @@ test("the bundled snapshots report the pull times in data/, the same ones the to
   }
 });
 
-test("station accessibility is MTA's record with fields left out, values unchanged", async () => {
+test("station accessibility: fields left out and reshaped, so modified by BetaNYC (shared module 1.4.0)", async () => {
   const r = await ask({ topic: "station-accessibility" });
   const s = one(r.structuredContent, "station-accessibility");
-  assert.equal(s.figures_official, true);
-  assert.match(r.content[0].text, /reshaped by BetaNYC with some fields left out \(values unchanged\)/);
+  assert.equal(s.figures_official, false);
+  assert.match(r.content[0].text, /^BetaNYC modified this data: reshaped it and left some fields out\. This copy should not be considered the official record\. Official record: MTA Subway Stations \(Metropolitan Transportation Authority\), https:\/\/data\.ny\.gov\/Transportation\/MTA-Subway-Stations\/39hk-dx4f$/m);
   assert.equal(s.report_errors.in_the_data_email, "OpenData@mtahq.org");
 });
 
