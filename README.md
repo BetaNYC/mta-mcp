@@ -624,6 +624,7 @@ email or graphic. MTA's own `header_text`, which writes the route as ASCII
 npm install          # install + build
 npm run build        # tsc
 npm test             # build, then the full suite, with no network access
+npm run eval         # build, then the 12 eval questions against the saved feeds
 npm run smoke        # one live request to MTA; not part of npm test or CI
 npm run stations     # regenerate data/stations.json from MTA's static GTFS
 npm run accessibility-data  # regenerate data/station_ada.json and data/equipment.json from data.ny.gov
@@ -632,6 +633,11 @@ npm run accessibility-data  # regenerate data/station_ada.json and data/equipmen
 The suite runs against saved fixtures in `test/fixtures/` with `fetch` stubbed.
 That pins the assertions to a known feed, including the CityCamp regression and
 the express-to-local false positive, and it keeps CI from ever calling MTA.
+
+`npm run eval` asks the tools twelve questions a rider or reporter would ask,
+each with a known answer from the saved feeds, and prints PASS or FAIL for
+each. It makes no network request. Save a run with
+`node eval/run.mjs --out eval/runs/YYYY-MM-DD.txt` before a release.
 
 `npm run smoke` makes one GET to MTA and prints what came back. Run it by hand
 to confirm the server can still reach the feed.
@@ -646,6 +652,7 @@ Layout:
 | `src/mta.ts` | fetch, rate limiting, parsing, effect classification, station matching |
 | `src/mta.test.ts` | unit tests for the pure functions |
 | `test/*.test.mjs` | tool-level, schema, rate-limiter, and skill tests against fixtures |
+| `eval/questions.json`, `eval/run.mjs`, `eval/runs/` | the evaluation set, its runner, and saved results |
 | `test/helpers/fixture-fetch.mjs` | stands in for `fetch` when the skill tests run the script |
 | `skills/mta-subway/` | the skill: `SKILL.md` and the command-line script |
 | `docs/tools.md` | full tool reference |

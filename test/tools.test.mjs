@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { TOOLS, callTool } from "../dist/tools.js";
+import { INSTRUCTIONS, TOOLS, callTool } from "../dist/tools.js";
 import {
   ENE_CURRENT_URL,
   ENE_UPCOMING_URL,
@@ -98,9 +98,8 @@ test("BetaNYC's reading of each alert sits in a `betanyc` object, apart from MTA
   }
   for (const alert of route.alerts) for (const k of STATION_KEYS) assert.ok(k in alert.betanyc, k);
   for (const alert of listed.alerts) for (const k of STATION_KEYS) assert.equal(k in alert.betanyc, false, k);
-  for (const tool of ["check_route_on_date", "get_service_alerts"]) {
-    assert.match(TOOLS.find((t) => t.name === tool).description, /`betanyc`/, `${tool} describes the betanyc object`);
-  }
+  // Said once for every tool in the server instructions since issue #18, not in each description.
+  assert.match(INSTRUCTIONS, /kept apart in a `betanyc` object: for an alert/, "the instructions describe the betanyc object");
 });
 
 test("the affected stops are exactly 614-619, and 628 is not among them", async () => {
@@ -780,6 +779,7 @@ test("BetaNYC's additions to an outage row sit in a `betanyc` object, apart from
     assert.ok(o.betanyc && ("matched_by" in o.betanyc || "match_note" in o.betanyc), o.equipment);
   }
   assert.match(TOOLS.find((t) => t.name === "get_accessibility_outages").description, /`betanyc`/);
+  assert.match(INSTRUCTIONS, /for an outage, how it was placed at a station/);
 });
 
 // ─── Alerts with no active_period ────────────────────────────────────────────

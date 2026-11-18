@@ -28,6 +28,10 @@ that happens with the release (CONTRIBUTING.md, "Releases").
 - `data/SHA256SUMS`: the SHA-256 of each bundled snapshot, rewritten by both update scripts
   and by `scripts/data-checksums.mjs`, and checked by `npm test`. (#15)
 - A test caps the size of the tool list plus the server instructions. (#11)
+- `eval/`: twelve realistic questions with known answers, run offline against the saved feeds
+  by `npm run eval`; results saved in `eval/runs/`. (#16)
+- Tests that stdout carries only JSON-RPC in server mode (#17), and that neither `npm test`
+  nor CI runs the live smoke check.
 
 ### Changed
 
@@ -35,6 +39,10 @@ that happens with the release (CONTRIBUTING.md, "Releases").
   alert. `alert_count` and `disrupting_alert_count` still count every match. (#14)
 - `get_accessibility_outages` returns 50 rows per call by default, where it used to return
   every row. `outage_count` now counts every match, not just the rows returned. (#14)
+- The server `instructions` now say once what every MTA tool shares (MTA's fields vs.
+  BetaNYC's `betanyc` object, the dated snapshots and `snapshot_as_of`/`snapshot_warning`,
+  paging), and the tool descriptions no longer repeat it. The about_data paragraph is
+  unchanged. (#18)
 - Errors are one plain sentence saying what went wrong and what to try. A wrongly typed or
   missing argument is named (it used to return zod's raw issue list as JSON). A failed request
   to MTA says whether it timed out, could not connect, or got an HTTP error, and what to do,

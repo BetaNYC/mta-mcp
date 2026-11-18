@@ -139,8 +139,17 @@ const EFFECTS = [
   "unknown",
 ] as const;
 
-/** The server's MCP `instructions`: when to call the three shared tools. */
-export const INSTRUCTIONS: string = betanyc.instructions;
+/**
+ * The server's MCP `instructions`: what holds for every MTA tool, said once here
+ * instead of in each description (issue #18), then when to call the three shared tools.
+ */
+export const INSTRUCTIONS: string = [
+  "NYC subway service alerts, elevator and escalator outages, and station lookup, from MTA's public feeds, by BetaNYC. Unofficial: BetaNYC is not the MTA, and riders should confirm service at https://www.mta.info before they travel.",
+  "In every answer, MTA's own fields are as MTA published them. What BetaNYC works out from them is kept apart in a `betanyc` object: for an alert, its effect, whether it counts as a disruption, whether it is planned work and whether its alert type is recognized; for an outage, how it was placed at a station and MTA's inventory details. Answers such as `disrupted` are BetaNYC's, not MTA's.",
+  "Station names, routes, ADA status and the elevator inventory come from dated copies bundled with this server, which the user must refresh; `snapshot_as_of` gives their dates and `snapshot_warning` flags old ones. Service alerts and outages are read live from MTA, cached up to a minute, and may not be real time.",
+  "Long lists come in pages: `paging.showing` says how many there are, and `offset: paging.next_offset` gets the next page. Counts cover every match.",
+  betanyc.instructions,
+].join("\n\n");
 
 // Every tool only reads (readOnlyHint: true). openWorldHint is true for the three that call
 // MTA's live feeds, false for resolve_station, which answers from the bundled snapshots.
@@ -150,7 +159,7 @@ export const TOOLS = annotateTools([
     name: "check_route_on_date",
     title: "Is a subway route disrupted on a date?",
     description:
-      "Is a subway route disrupted on a given date, optionally at one station? Dates are interpreted in America/New_York. Answers from MTA's service-alert feed. A station that only GAINS service (an express train running local) is reported as affected but NOT disrupted. Station-level absence is not absence of impact — read station_level_detail before treating disrupted:false as a guarantee. The station carries MTA's ADA status; elevator outages are included only with include_accessibility:true. Each alert's own fields are MTA's; BetaNYC's reading of it (effect, counts_as_disruption, planned, alert_type_recognized, and whether it bears on the station) is in its `betanyc` object, and disrupted is BetaNYC's answer from those, not MTA's. Station names and ADA status come from local snapshots the user must refresh; snapshot_as_of gives their dates and snapshot_warning flags old ones.",
+      "Is a subway route disrupted on a given date, optionally at one station? Dates are interpreted in America/New_York. Answers from MTA's service-alert feed. A station that only GAINS service (an express train running local) is reported as affected but NOT disrupted. Station-level absence is not absence of impact — read station_level_detail before treating disrupted:false as a guarantee. The station carries MTA's ADA status; elevator outages are included only with include_accessibility:true. Each alert's `betanyc` object also says whether it bears on the station, and disrupted is BetaNYC's answer from those readings, not MTA's.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -182,7 +191,7 @@ export const TOOLS = annotateTools([
     name: "get_service_alerts",
     title: "Subway service alerts",
     description:
-      "List MTA subway service alerts active on a date, with optional filters. Defaults to today in America/New_York. Use this for open-ended questions like what is happening on a line this weekend. Each alert's own fields are MTA's; BetaNYC's reading of it (effect, counts_as_disruption, planned, alert_type_recognized) is in its `betanyc` object, and disrupting_alert_count counts those. Stop names come from a local station snapshot the user must refresh; see snapshot_as_of and snapshot_warning.",
+      "List MTA subway service alerts active on a date, with optional filters. Defaults to today in America/New_York. Use this for open-ended questions like what is happening on a line this weekend. disrupting_alert_count counts the alerts BetaNYC reads as disruptions.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -215,7 +224,7 @@ export const TOOLS = annotateTools([
     name: "resolve_station",
     title: "Find a subway station",
     description:
-      "Resolve free-text station names to GTFS parent-station ids, ranked best first, with the routes serving each and MTA's ADA status. Reads a bundled snapshot of MTA's static GTFS — no network call. The station list and ADA status are local snapshots the user must refresh; snapshot_as_of gives their dates and snapshot_warning flags old ones. Station names are not unique: '125 St' is four different stations on four different lines, so every candidate is returned rather than one guessed. route_id is the disambiguator.",
+      "Resolve free-text station names to GTFS parent-station ids, ranked best first, with the routes serving each and MTA's ADA status. Reads a bundled snapshot of MTA's static GTFS — no network call. Station names are not unique: '125 St' is four different stations on four different lines, so every candidate is returned rather than one guessed. route_id is the disambiguator.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -235,7 +244,7 @@ export const TOOLS = annotateTools([
     name: "get_accessibility_outages",
     title: "Elevator and escalator outages",
     description:
-      "Elevator and escalator outages in the subway: in effect now, scheduled, or overlapping one date, with MTA's alternate route for each elevator. With stop_id, rows are placed by equipment ID using MTA's equipment inventory, with name matching as a fallback. Each row's own fields are MTA's; what BetaNYC adds (matched_by, which says how the row was placed, match_note, and the inventory's details for that equipment) is in its `betanyc` object. Zero matches is not proof of no outage, and no outage is not proof a station is usable; read no_match_note and station_accessibility. Equipment locations, alternate routes, and ADA status come from local snapshots the user must refresh; snapshot_as_of gives their dates and snapshot_warning flags old ones.",
+      "Elevator and escalator outages in the subway: in effect now, scheduled, or overlapping one date, with MTA's alternate route for each elevator. With stop_id, rows are placed by equipment ID using MTA's equipment inventory, with name matching as a fallback. Each row's `betanyc` object says how it was placed (matched_by, match_note) and adds the inventory's details for that equipment. Zero matches is not proof of no outage, and no outage is not proof a station is usable; read no_match_note and station_accessibility.",
     inputSchema: {
       type: "object",
       additionalProperties: false,

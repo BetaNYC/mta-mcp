@@ -1,0 +1,333 @@
+{
+  "_readme": [
+    "Fixed question set, written 2026-11-18 before scoring. Each question is one a rider or a reporter would ask, with a known right answer.",
+    "Answers are checked against the saved MTA feeds in test/fixtures/ (pulled 2026-09-16 and 2026-09-17) and the bundled snapshots in data/. No request goes to MTA. Run: npm run eval.",
+    "Each step calls one tool. Checks: `equals` [path, value]; `includes` [path, value] (an array holds the value, or a string contains it); `length` [path, n]; `sorted` [path to an array of objects, field, values] (that field across the array, sorted, equals the values). Paths are dotted; numbers index arrays.",
+    "The expected answers come from MTA's own records in the fixtures: alert ids, stop ids and equipment codes as MTA published them.",
+    "What it scores: the tools' answers to scripted calls, so a wrong answer from the server is caught. It does not score an AI assistant choosing the tools; that needs a model in the loop and is a separate run."
+  ],
+  "questions": [
+    {
+      "id": "Q01",
+      "q": "Will the 6 stop at 68 St-Hunter College on Saturday, September 19, 2026?",
+      "steps": [
+        {
+          "tool": "check_route_on_date",
+          "args": {
+            "route_id": "6",
+            "date": "2026-09-19",
+            "station": "68 St-Hunter College"
+          },
+          "check": {
+            "equals": [
+              [
+                "station.stop_id",
+                "628"
+              ],
+              [
+                "disrupted",
+                false
+              ]
+            ]
+          }
+        }
+      ],
+      "note": "The 6 is suspended in the Bronx that weekend (614 to 619), not at 628. MTA's mercury_alert.affected_stations lists the whole route, so a reader of that field would wrongly say yes."
+    },
+    {
+      "id": "Q02",
+      "q": "What is happening on the 6 train on 2026-09-19?",
+      "steps": [
+        {
+          "tool": "get_service_alerts",
+          "args": {
+            "route_id": "6",
+            "date": "2026-09-19"
+          },
+          "check": {
+            "equals": [
+              [
+                "alert_count",
+                1
+              ],
+              [
+                "alerts.0.entity_id",
+                "lmm:planned_work:33826"
+              ],
+              [
+                "alerts.0.alert_type",
+                "Planned - Part Suspended"
+              ],
+              [
+                "alerts.0.betanyc.effect",
+                "reduced"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "Q03",
+      "q": "Which stations does the 6 skip that weekend?",
+      "steps": [
+        {
+          "tool": "get_service_alerts",
+          "args": {
+            "route_id": "6",
+            "date": "2026-09-19"
+          },
+          "check": {
+            "sorted": [
+              [
+                "alerts.0.affected_stops",
+                "stop_id",
+                [
+                  "614",
+                  "615",
+                  "616",
+                  "617",
+                  "618",
+                  "619"
+                ]
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "Q04",
+      "q": "How many subway service alerts are in effect on 2026-09-19, on all lines?",
+      "steps": [
+        {
+          "tool": "get_service_alerts",
+          "args": {
+            "date": "2026-09-19"
+          },
+          "check": {
+            "equals": [
+              [
+                "alert_count",
+                9
+              ],
+              [
+                "paging.total",
+                9
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "Q05",
+      "q": "Is there planned work on Wednesday, September 16, 2026?",
+      "steps": [
+        {
+          "tool": "get_service_alerts",
+          "args": {
+            "date": "2026-09-16",
+            "planned_only": true
+          },
+          "check": {
+            "equals": [
+              [
+                "alert_count",
+                1
+              ],
+              [
+                "alerts.0.entity_id",
+                "lmm:planned_work:33366"
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "Q06",
+      "q": "I'm meeting someone at 125 St. Which station is that?",
+      "steps": [
+        {
+          "tool": "resolve_station",
+          "args": {
+            "query": "125 St"
+          },
+          "check": {
+            "equals": [
+              [
+                "match_count",
+                4
+              ],
+              [
+                "unambiguous",
+                false
+              ]
+            ]
+          }
+        },
+        {
+          "tool": "resolve_station",
+          "args": {
+            "query": "125 St",
+            "route_id": "6"
+          },
+          "check": {
+            "equals": [
+              [
+                "match_count",
+                1
+              ],
+              [
+                "candidates.0.stop_id",
+                "621"
+              ]
+            ]
+          }
+        }
+      ],
+      "note": "Four stations share the name. The right answer asks which line, or names all four; with the 6 it is 621."
+    },
+    {
+      "id": "Q07",
+      "q": "Is the 4/5/6 platform at 14 St-Union Sq wheelchair accessible?",
+      "steps": [
+        {
+          "tool": "resolve_station",
+          "args": {
+            "query": "14 St-Union Sq",
+            "route_id": "6"
+          },
+          "check": {
+            "equals": [
+              [
+                "candidates.0.stop_id",
+                "635"
+              ],
+              [
+                "candidates.0.accessibility.status",
+                "not_accessible"
+              ]
+            ]
+          }
+        }
+      ],
+      "note": "The complex's L and N/Q/R/W stations are accessible; the 4/5/6 station is not. A complex-level answer would be wrong."
+    },
+    {
+      "id": "Q08",
+      "q": "Are any elevator or escalator outages scheduled at Jamaica-179 St?",
+      "steps": [
+        {
+          "tool": "get_accessibility_outages",
+          "args": {
+            "station": "Jamaica-179 St",
+            "upcoming": true
+          },
+          "check": {
+            "equals": [
+              [
+                "outage_count",
+                3
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "Q09",
+      "q": "Which elevators at Jamaica-179 St are out on September 28, 2026?",
+      "steps": [
+        {
+          "tool": "get_accessibility_outages",
+          "args": {
+            "station": "Jamaica-179 St",
+            "date": "2026-09-28"
+          },
+          "check": {
+            "sorted": [
+              [
+                "outages",
+                "equipment",
+                [
+                  "EL431",
+                  "EL432",
+                  "EL433"
+                ]
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "Q10",
+      "q": "How many elevator and escalator outages are there on the 6 line?",
+      "steps": [
+        {
+          "tool": "get_accessibility_outages",
+          "args": {
+            "route_id": "6"
+          },
+          "check": {
+            "equals": [
+              [
+                "outage_count",
+                7
+              ]
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "id": "Q11",
+      "q": "Are the elevators at Union St (R) out?",
+      "steps": [
+        {
+          "tool": "get_accessibility_outages",
+          "args": {
+            "stop_id": "R32"
+          },
+          "check": {
+            "equals": [
+              [
+                "outage_count",
+                0
+              ],
+              [
+                "other_station_outages.0.station",
+                "14 St-Union Sq"
+              ]
+            ]
+          }
+        }
+      ],
+      "note": "A name search for 'Union St' also matches 14 St-Union Sq's rows. MTA's inventory places them at R20, so the answer for R32 is none."
+    },
+    {
+      "id": "Q12",
+      "q": "Where does the elevator outage information come from?",
+      "steps": [
+        {
+          "tool": "get_accessibility_outages",
+          "args": {},
+          "check": {
+            "includes": [
+              [
+                "data_source",
+                "https://api.mta.info/#/EAndEFeeds"
+              ],
+              [
+                "disclaimer",
+                "Unofficial"
+              ]
+            ]
+          }
+        }
+      ]
+    }
+  ]
+}
