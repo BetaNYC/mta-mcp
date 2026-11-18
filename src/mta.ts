@@ -99,14 +99,21 @@ export function retryAfterMs(header: string | null): number {
 // process, across all URLs. Awaiting the tail before starting is what makes the
 // spacing global rather than per-URL — four tools firing at once queue, they do
 // not burst.
+//
+// The gap is measured on the monotonic clock (performance.now), and the wait
+// loops until that clock agrees. Node's timers run on a cached, whole-millisecond
+// loop time, so a single sleep can wake up to a millisecond before the gap has
+// really passed; Date.now is the wall clock, which can also step. Issue #6.
 let gate: Promise<void> = Promise.resolve();
-let lastRequestAt = 0;
+let lastRequestAt = -Infinity;
 
 function throughGate<T>(run: () => Promise<T>): Promise<T> {
   const turn = gate.then(async () => {
-    const wait = lastRequestAt + minIntervalMs() - Date.now();
-    if (wait > 0) await sleep(wait);
-    lastRequestAt = Date.now();
+    let wait: number;
+    while ((wait = lastRequestAt + minIntervalMs() - performance.now()) > 0) {
+      await sleep(Math.ceil(wait));
+    }
+    lastRequestAt = performance.now();
   });
   // The chain must advance even when `run` rejects, or one failure deadlocks
   // every later request behind it.

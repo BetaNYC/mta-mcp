@@ -26,7 +26,8 @@ function status(code, headers = {}) {
 
 globalThis.fetch = async () => {
   fetchCount += 1;
-  requestedAt.push(Date.now());
+  // The gate's own clock, so the measurement and the guarantee agree (issue #6).
+  requestedAt.push(performance.now());
   const next = nextResponses.length > 0 ? nextResponses.shift() : ok();
   return next();
 };
@@ -104,6 +105,13 @@ test("concurrent calls for one URL share a single request", async () => {
 });
 
 // ─── Mechanism 3: global minimum interval ────────────────────────────────────
+//
+// The gate stamps its clock just before it lets a request go; the stub stamps
+// when fetch is reached, a few microseconds later. That offset differs a little
+// between two requests, so the measured gap may fall short of the gate's by a
+// fraction of a millisecond. SLACK_MS covers that and nothing more: a gate that
+// woke early by a whole millisecond or more still fails (issue #6).
+const SLACK_MS = 0.5;
 
 test("sequential requests are spaced by at least the minimum interval", async () => {
   reset();
@@ -113,7 +121,7 @@ test("sequential requests are spaced by at least the minimum interval", async ()
   await fetchFeed(url("gap-b"));
   assert.equal(fetchCount, 2);
   const gap = requestedAt[1] - requestedAt[0];
-  assert.ok(gap >= 150, `expected >= 150ms between requests, got ${gap}ms`);
+  assert.ok(gap >= 150 - SLACK_MS, `expected >= 150ms between requests, got ${gap.toFixed(3)}ms`);
   delete process.env.MTA_MCP_CACHE_TTL_MS;
 });
 
@@ -124,7 +132,7 @@ test("the gate is global: different URLs fired at once still queue", async () =>
   await Promise.all([fetchFeed(url("global-a")), fetchFeed(url("global-b"))]);
   assert.equal(fetchCount, 2);
   const gap = requestedAt[1] - requestedAt[0];
-  assert.ok(gap >= 150, `expected >= 150ms between two different URLs, got ${gap}ms`);
+  assert.ok(gap >= 150 - SLACK_MS, `expected >= 150ms between two different URLs, got ${gap.toFixed(3)}ms`);
   delete process.env.MTA_MCP_CACHE_TTL_MS;
 });
 
