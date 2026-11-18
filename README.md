@@ -656,6 +656,8 @@ Layout:
 | `data/equipment.json` | generated elevator and escalator inventory, from data.ny.gov `94fv-bak7` |
 | `scripts/update-stations.mjs` | regenerates `data/stations.json` from MTA's static GTFS |
 | `scripts/update-accessibility-data.mjs` | regenerates the two data.ny.gov snapshots |
+| `data/SHA256SUMS` | the SHA-256 of each file in `data/`, checked by `npm test` |
+| `scripts/data-checksums.mjs` | rewrites `data/SHA256SUMS` (the update scripts call it); `--check` only compares |
 | `scripts/smoke.mjs` | the single live request |
 | `scripts/whats_changed.py` | checks `WHATS-CHANGED.md` and builds `docs/whats-changed.html`, a copy of the BetaNYC shared script. Never edit it here |
 | `WHATS-CHANGED.md` | the reader-facing record of changes, read by `whats_changed` |
