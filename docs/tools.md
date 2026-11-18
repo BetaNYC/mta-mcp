@@ -17,7 +17,12 @@ ever disagree, the code is right and this page needs fixing.
 - **Answers are compact JSON,** one line with no indentation, to save tokens.
   In a sample of four answers from the fixtures, that cut 13 to 34 percent of
   the characters.
-- **Errors come back as text starting with `Error:`,** with `isError: true`.
+- **Errors come back as text starting with `Error:`,** with `isError: true`:
+  one plain sentence on what went wrong and what to try. A wrong argument is
+  named (`'date' is required`). When MTA's feed fails, the sentence says whether
+  it timed out, could not be reached, or answered with an HTTP error, and what
+  to do; MTA's own response follows after "The source said:", cut to 500
+  characters. No stack trace is ever included.
 - **Every tool is marked read-only.** Each carries MCP `annotations` with a
   `title`, `readOnlyHint: true`, and `openWorldHint`: `true` for the three
   tools that read MTA's live feeds, `false` for `resolve_station`, which reads

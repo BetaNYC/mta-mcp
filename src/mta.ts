@@ -114,6 +114,25 @@ function throughGate<T>(run: () => Promise<T>): Promise<T> {
   return turn.then(run);
 }
 
+/**
+ * A failed request to MTA, with what a tool needs to say so plainly: the HTTP
+ * status (null when no answer came back), whether it timed out, and MTA's
+ * response body (already cut to MAX_ERROR_BODY_CHARS). The message is for logs
+ * and tests; tools build their own sentence from the fields (src/tools.ts).
+ */
+export class FeedError extends Error {
+  constructor(
+    message: string,
+    readonly url: string,
+    readonly status: number | null,
+    readonly body: string,
+    readonly timedOut: boolean = false
+  ) {
+    super(message);
+    this.name = "FeedError";
+  }
+}
+
 /** Mechanisms 4 + 5 + 6: one attempt, with a timeout and identifying headers. */
 async function attempt(url: string): Promise<Response> {
   const controller = new AbortController();
@@ -123,12 +142,25 @@ async function attempt(url: string): Promise<Response> {
       headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
       signal: controller.signal,
     });
+  } catch (err) {
+    // Not retried, as before: only an HTTP answer of 429 or 5xx is.
+    const timedOut = controller.signal.aborted;
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new FeedError(
+      timedOut
+        ? `MTA feed request timed out after ${REQUEST_TIMEOUT_MS / 1000}s for ${url}`
+        : `MTA feed request failed for ${url}: ${reason}`,
+      url,
+      null,
+      "",
+      timedOut
+    );
   } finally {
     clearTimeout(timer);
   }
 }
 
-async function errorFromResponse(url: string, res: Response): Promise<Error> {
+async function errorFromResponse(url: string, res: Response): Promise<FeedError> {
   let body = "";
   try {
     body = (await res.text()).trim();
@@ -143,7 +175,7 @@ async function errorFromResponse(url: string, res: Response): Promise<Error> {
     message += " — the feed URL may have moved; check https://api.mta.info/.";
   }
   if (body) message += ` Response body: ${body}`;
-  return new Error(message);
+  return new FeedError(message, url, res.status, body);
 }
 
 /** A 4xx other than 429 is our bug, not congestion. Retrying it is just load. */
@@ -176,7 +208,7 @@ export async function fetchFeed(url: string): Promise<FeedResult> {
   }
 
   const work = (async (): Promise<CacheEntry> => {
-    let lastError: Error | undefined;
+    let lastError: FeedError | undefined;
     let wait = 0;
     for (let tryNo = 0; tryNo <= MAX_RETRIES; tryNo++) {
       if (wait > 0) await sleep(wait);

@@ -23,6 +23,11 @@ that happens with the release (CONTRIBUTING.md, "Releases").
 
 ### Changed
 
+- Errors are one plain sentence saying what went wrong and what to try. A wrongly typed or
+  missing argument is named (it used to return zod's raw issue list as JSON). A failed request
+  to MTA says whether it timed out, could not connect, or got an HTTP error, and what to do,
+  with MTA's response body after it, cut to 500 characters, and no stack trace. An unknown
+  tool name lists the tools there are. Uses the shared `toolError`. (#12)
 - Shared files updated: `src/betanyc-tools.ts` 1.5.0, `scripts/whats_changed.py` and
   `scripts/mcp_shared/data-sources.schema.json` 1.4.1. Copied unchanged. (#9)
 

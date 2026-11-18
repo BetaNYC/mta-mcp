@@ -12,6 +12,7 @@ import {
   DATA_SOURCE,
   DISCLAIMER,
   EFFECT_BY_ALERT_TYPE,
+  FeedError,
   ENE_CURRENT_URL,
   EQUIPMENT,
   STATION_ADA,
@@ -45,7 +46,7 @@ import {
   VERSION,
 } from "./mta.js";
 import { type SnapshotName, SNAPSHOTS, snapshotFooter, stationListHint } from "./freshness.js";
-import { annotateTools, createBetanycTools } from "./betanyc-tools.js";
+import { type ToolResult, annotateTools, createBetanycTools, toolError } from "./betanyc-tools.js";
 
 /**
  * whats_changed, about_betanyc and about_data, the three tools BetaNYC is adding to each of its
@@ -258,7 +259,18 @@ export function parseToolArgs<K extends keyof typeof ARG_SHAPES>(
   const rejected = parsed.error.issues.flatMap((issue) =>
     issue.code === "unrecognized_keys" ? issue.keys : []
   );
-  if (rejected.length === 0) throw parsed.error;
+  if (rejected.length === 0) {
+    // zod's own error is a JSON list of issues; say it as a sentence instead.
+    const issues = parsed.error.issues.map((i) => {
+      const where = i.path.length > 0 ? `'${i.path.join(".")}'` : "the arguments";
+      return i.code === "invalid_type" && i.received === "undefined"
+        ? `${where} is required`
+        : `${where}: ${i.message}`;
+    });
+    throw new Error(
+      `${tool} cannot use these arguments: ${issues.join("; ")}. Fix them and call again; the tool's input schema lists each parameter and its type.`
+    );
+  }
   throw new Error(
     `${tool} does not accept ${rejected.map((k) => `'${k}'`).join(", ")}. ` +
       `The parameters it accepts are: ${Object.keys(shape).join(", ")}. ` +
@@ -1110,10 +1122,43 @@ export async function callTool(name: string, args: unknown) {
       }
 
       default:
-        return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
+        return toolError(
+          `Unknown tool: ${name}. This server's tools are: ${TOOLS.map((t) => t.name).join(", ")}.`
+        );
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { content: [{ type: "text", text: `Error: ${message}` }], isError: true };
+    return errorResult(err);
   }
+}
+
+const REPORT_BUG = "https://github.com/BetaNYC/mta-mcp/issues";
+
+/**
+ * Every failure as an isError result: one plain sentence on what went wrong and
+ * what to try, MTA's response body cut to 500 characters, no stack trace
+ * (toolError, from the shared module, starts the text with "Error: "). Issue
+ * #12. The tools' own errors are already sentences; a failed request to MTA is
+ * put into words here.
+ */
+export function errorResult(err: unknown): ToolResult {
+  if (err instanceof FeedError) {
+    const feed = ` Feed: ${err.url}`;
+    let message: string;
+    if (err.timedOut) {
+      message = `MTA's feed did not answer within 15 seconds. Try again in a minute. For service right now, check https://www.mta.info.${feed}`;
+    } else if (err.status === null) {
+      message = `Could not reach MTA's feed (${err.message.replace(/^.*?: /, "")}). Check this computer's internet connection and try again.${feed}`;
+    } else if (err.status === 404) {
+      message = `MTA's feed answered 404 Not Found, so the feed address may have moved. Please report a bug in this server at ${REPORT_BUG}.${feed}`;
+    } else if (err.status === 429) {
+      message = `MTA's feed asked for fewer requests (HTTP 429) and was still saying so after two retries. Wait a minute and try again.${feed}`;
+    } else if (err.status >= 500) {
+      message = `MTA's feed had a problem on its side (HTTP ${err.status}) and was still failing after two retries. Try again in a few minutes. For service right now, check https://www.mta.info.${feed}`;
+    } else {
+      message = `MTA's feed refused the request (HTTP ${err.status}). That is likely a bug in this server; please report it at ${REPORT_BUG}.${feed}`;
+    }
+    return toolError(`${message}`, { upstreamBody: err.body });
+  }
+  if (err instanceof Error) return toolError(`${err.message}`);
+  return toolError(`The tool failed unexpectedly (${String(err)}). Please report a bug in this server at ${REPORT_BUG}.`);
 }

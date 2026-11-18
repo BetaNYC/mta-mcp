@@ -7,10 +7,10 @@ This page lists the changes to mta-mcp that a reader would notice: new tools, ne
 
 mta-mcp is not published to npm. You run it from your own copy of the repository, so a change reaches you when you update that copy and rebuild it. To report a bug in this server or ask for a new feature, [open an issue on GitHub](https://github.com/BetaNYC/mta-mcp/issues).
 
-## Unreleased: Tools say they only read
+## Unreleased: Tools say they only read, and errors say what to try
 
 - **Tags:** MCP
-- **What changed:** Every tool now tells your AI app that it only reads and never changes anything, and whether it reaches out to MTA's live feeds or answers from the copies kept in the repository. Apps can use this to skip asking you before each call. Each tool also has a short, plain title.
+- **What changed:** Every tool now tells your AI app that it only reads and never changes anything, and whether it reaches out to MTA's live feeds or answers from the copies kept in the repository. Apps can use this to skip asking you before each call. Each tool also has a short, plain title. When something goes wrong, the answer is now one plain sentence saying what happened and what to try: which question was asked the wrong way, or whether MTA's feed timed out, could not be reached or sent back an error.
 - **MCP version:** [mta-mcp 0.4.0](CHANGELOG.md)
 - **More detail:** [Tool reference](docs/tools.md)
 
