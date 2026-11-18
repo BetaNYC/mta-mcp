@@ -9,7 +9,7 @@ This package is not published to npm. Version numbers track the local build. See
 
 ## [Unreleased]
 
-## [0.3.0] — Unreleased
+## [0.3.0] — 2026-11-16
 
 Adds `about_data`, the third tool BetaNYC is adding to each of its MCP servers, and keeps
 BetaNYC's reading of each service alert apart from MTA's fields. **The alert output changes
