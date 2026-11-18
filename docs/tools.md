@@ -18,6 +18,10 @@ ever disagree, the code is right and this page needs fixing.
   In a sample of four answers from the fixtures, that cut 13 to 34 percent of
   the characters.
 - **Errors come back as text starting with `Error:`,** with `isError: true`.
+- **Every tool is marked read-only.** Each carries MCP `annotations` with a
+  `title`, `readOnlyHint: true`, and `openWorldHint`: `true` for the three
+  tools that read MTA's live feeds, `false` for `resolve_station`, which reads
+  only the bundled snapshots. An app can use these to skip asking before a call.
 - **Nothing is fetched until a tool is called,** and a fetched feed is reused
   for 60 seconds. See [Responsible use](../README.md#responsible-use).
 

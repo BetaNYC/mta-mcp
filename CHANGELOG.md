@@ -9,6 +9,23 @@ This package is not published to npm. Version numbers track the local build. See
 
 ## [Unreleased]
 
+## [0.4.0] — Unreleased
+
+BetaNYC's MCP practices (epic #19). The version number in `package.json` is not yet bumped;
+that happens with the release (CONTRIBUTING.md, "Releases").
+
+### Added
+
+- Every tool carries MCP `annotations`: a `title`, `readOnlyHint: true`, and `openWorldHint`
+  (`true` for the three tools that read MTA's feeds, `false` for `resolve_station`). Each MTA
+  tool also has a `title`. (#10)
+- A test caps the size of the tool list plus the server instructions at 18,800 characters. (#11)
+
+### Changed
+
+- Shared files updated: `src/betanyc-tools.ts` 1.5.0, `scripts/whats_changed.py` and
+  `scripts/mcp_shared/data-sources.schema.json` 1.4.1. Copied unchanged. (#9)
+
 ## [0.3.0] — 2026-11-16
 
 Adds `about_data`, the third tool BetaNYC is adding to each of its MCP servers, and keeps
