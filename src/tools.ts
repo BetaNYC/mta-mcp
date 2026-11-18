@@ -11,6 +11,8 @@ import {
   type StationMatch,
   DATA_SOURCE,
   DISCLAIMER,
+  ENE_DATA_SOURCE,
+  STATIONS_DATA_SOURCE,
   EFFECT_BY_ALERT_TYPE,
   FeedError,
   ENE_CURRENT_URL,
@@ -73,6 +75,59 @@ export const betanyc = createBetanycTools({
     equipment_pulled: () => SNAPSHOTS.equipment.asOf() ?? null,
   },
 });
+
+// List limits (issue #14): a default, a hard maximum, and offset to page. Counts in each
+// answer (alert_count, outage_count, match_count) always cover every match, not just the page.
+export const LIMITS = {
+  get_service_alerts: { default: 20, max: 100, noun: "alerts" },
+  get_accessibility_outages: { default: 50, max: 200, noun: "outages" },
+  resolve_station: { default: 10, max: 50, noun: "stations" },
+} as const;
+
+function pagingProps(tool: keyof typeof LIMITS) {
+  const l = LIMITS[tool];
+  return {
+    limit: {
+      type: "integer",
+      minimum: 1,
+      maximum: l.max,
+      description: `Most ${l.noun} to return. Default ${l.default}, maximum ${l.max}.`,
+    },
+    offset: {
+      type: "integer",
+      minimum: 0,
+      description: `Skip this many ${l.noun} first, to page through. Default 0; each answer's paging.next_offset gives the next one.`,
+    },
+  };
+}
+
+const pagingArgs = (tool: keyof typeof LIMITS) => ({
+  limit: z.number().int().min(1).max(LIMITS[tool].max).optional(),
+  offset: z.number().int().min(0).optional(),
+});
+
+/** One page of a list, and a paging block saying "showing N of M" and how to get the rest. */
+export function page<T>(items: T[], tool: keyof typeof LIMITS, args: { limit?: number; offset?: number }) {
+  const { default: def, noun } = LIMITS[tool];
+  const limit = args.limit ?? def;
+  const offset = args.offset ?? 0;
+  const rows = items.slice(offset, offset + limit);
+  const next = offset + rows.length < items.length ? offset + rows.length : null;
+  const range = rows.length > 0 ? ` (${offset + 1} to ${offset + rows.length})` : "";
+  return {
+    rows,
+    paging: {
+      total: items.length,
+      returned: rows.length,
+      offset,
+      limit,
+      next_offset: next,
+      showing:
+        `Showing ${rows.length} of ${items.length} ${noun}${range}.` +
+        (next !== null ? ` More are available: call again with offset ${next}.` : ""),
+    },
+  };
+}
 
 const EFFECTS = [
   "reduced",
@@ -152,6 +207,7 @@ export const TOOLS = annotateTools([
           enum: EFFECTS,
           description: "Restrict to one classified effect. 'unknown' means an alert_type this server does not recognize.",
         },
+        ...pagingProps("get_service_alerts"),
       },
     },
   },
@@ -170,6 +226,7 @@ export const TOOLS = annotateTools([
           description:
             "Restrict to stations served by this route, e.g. '6'. This is how an ambiguous name is narrowed to one station.",
         },
+        ...pagingProps("resolve_station"),
       },
       required: ["query"],
     },
@@ -204,6 +261,7 @@ export const TOOLS = annotateTools([
           description:
             "false (default) returns outages in effect now; true returns scheduled future outages. true cannot be combined with date.",
         },
+        ...pagingProps("get_accessibility_outages"),
       },
     },
   },
@@ -230,14 +288,16 @@ const ARG_SHAPES = {
     alert_type: z.string().optional(),
     planned_only: z.boolean().optional(),
     effect: z.enum(EFFECTS).optional(),
+    ...pagingArgs("get_service_alerts"),
   },
-  resolve_station: { query: z.string(), route_id: z.string().optional() },
+  resolve_station: { query: z.string(), route_id: z.string().optional(), ...pagingArgs("resolve_station") },
   get_accessibility_outages: {
     station: z.string().optional(),
     stop_id: z.string().optional(),
     route_id: z.string().optional(),
     date: z.string().optional(),
     upcoming: z.boolean().optional(),
+    ...pagingArgs("get_accessibility_outages"),
   },
 };
 
@@ -289,7 +349,7 @@ export function parseToolArgs<K extends keyof typeof ARG_SHAPES>(
  * than a minute; our cache TTL alone can do that, and MTA publishes no refresh
  * cadence for the feed itself, so no answer here is ever provably current.
  */
-function provenance(fetchedAt: number, feedTimestamp?: number) {
+function provenance(fetchedAt: number, feedTimestamp?: number, dataSource: string = DATA_SOURCE) {
   return {
     fetched_at: new Date(fetchedAt).toISOString(),
     feed_timestamp: feedTimestamp ?? null,
@@ -298,7 +358,8 @@ function provenance(fetchedAt: number, feedTimestamp?: number) {
     staleness_note: `Responses are served from an in-process cache for up to ${Math.round(
       cacheTtlMs() / 1000
     )}s, and MTA does not publish a refresh cadence for this feed. Treat every result as possibly stale.`,
-    data_source: DATA_SOURCE,
+    // The feed or feeds this answer read, with a link (issue #13).
+    data_source: dataSource,
     disclaimer: DISCLAIMER,
   };
 }
@@ -399,7 +460,9 @@ async function checkRouteOnDate(args: {
         date,
         resolved: false,
         reason: ambiguityReason(args.station, args.route_id, resolved.reason),
-        candidates: withAccessibility(resolved.candidates),
+        // ponytail: first 10 only; resolve_station pages through the rest.
+        candidate_count: resolved.candidates.length,
+        candidates: withAccessibility(resolved.candidates.slice(0, LIMITS.resolve_station.default)),
         ...snapshotFooter(["stations", "station_ada"]),
         ...provenance(Date.now()),
       };
@@ -489,7 +552,11 @@ async function checkRouteOnDate(args: {
         ...(accessibilityOutages ? (["equipment"] as SnapshotName[]) : []),
       ]
     ),
-    ...provenance(fetchedAt, feedTimestamp),
+    ...provenance(
+      fetchedAt,
+      feedTimestamp,
+      accessibilityOutages ? `${DATA_SOURCE}; ${ENE_DATA_SOURCE}` : DATA_SOURCE
+    ),
   };
 }
 
@@ -531,6 +598,8 @@ async function getServiceAlerts(args: {
   alert_type?: string;
   planned_only?: boolean;
   effect?: Effect;
+  limit?: number;
+  offset?: number;
 }) {
   const date = args.date ? assertIsoDate(args.date) : todayIso();
   const { entities, fetchedAt, feedTimestamp } = await loadAlerts();
@@ -564,14 +633,14 @@ async function getServiceAlerts(args: {
       ...new Set(shaped.filter((a) => !a.betanyc.alert_type_recognized).map((a) => a.alert_type)),
     ],
     known_alert_types: Object.keys(EFFECT_BY_ALERT_TYPE),
-    alerts: shaped,
+    ...(({ rows, paging }) => ({ paging, alerts: rows }))(page(shaped, "get_service_alerts", args)),
     // Stop names in affected_stops come from the station list.
     ...snapshotFooter(["stations"]),
     ...provenance(fetchedAt, feedTimestamp),
   };
 }
 
-function resolveStation(args: { query: string; route_id?: string }) {
+function resolveStation(args: { query: string; route_id?: string; limit?: number; offset?: number }) {
   if (args.route_id !== undefined) assertRouteFilterAvailable();
   const matches = resolveStationMatches(args.query, { routeId: args.route_id });
   const unambiguous =
@@ -584,7 +653,9 @@ function resolveStation(args: { query: string; route_id?: string }) {
     // Candidates are never collapsed. 193 of 496 parent stations share a name
     // with another station, so picking the first match is a coin flip dressed
     // up as an answer.
-    candidates: withAccessibility(matches),
+    ...(({ rows, paging }) => ({ paging, candidates: withAccessibility(rows) }))(
+      page(matches, "resolve_station", args)
+    ),
     note: unambiguous
       ? null
       : "More than one station matches equally well. Pass route_id to narrow, or pick a stop_id from the candidates.",
@@ -597,6 +668,9 @@ function resolveStation(args: { query: string; route_id?: string }) {
     },
     ada_data: adaData(),
     ...snapshotFooter(["stations", "station_ada"]),
+    // Nothing is fetched; both are bundled copies, dated in snapshot_as_of (issue #13).
+    data_source: STATIONS_DATA_SOURCE,
+    disclaimer: DISCLAIMER,
   };
 }
 
@@ -827,6 +901,8 @@ async function getAccessibilityOutages(args: {
   route_id?: string;
   date?: string;
   upcoming?: boolean;
+  limit?: number;
+  offset?: number;
 }) {
   if (args.date !== undefined && args.upcoming === true) {
     // Two different questions. `date` already covers outages in effect now and
@@ -873,23 +949,27 @@ async function getAccessibilityOutages(args: {
     ? byDate.filter((row) => rowMatchesRouteTokens(row, routeTokens) !== false)
     : byDate;
 
-  let outages: ShapedOutage[];
+  let allOutages: ShapedOutage[];
   let complex: ShapedOutage[] | null = null;
   let otherStation: ShapedOutage[] | null = null;
   let withoutStation: number | null = null;
   if (station) {
     const placed = placeAtStation(byRoute, station);
-    outages = placed.outages;
+    allOutages = placed.outages;
     complex = complexStopIds(station.stop_id).length > 0 ? placed.complex : null;
     otherStation = placed.other;
     withoutStation = placed.withoutStation;
   } else if (query) {
     const named = matchByName(byRoute, query);
-    outages = named.outages;
+    allOutages = named.outages;
     withoutStation = named.withoutStation;
   } else {
-    outages = byRoute.map((row) => shapeOutage(row, null, null, false));
+    allOutages = byRoute.map((row) => shapeOutage(row, null, null, false));
   }
+
+  // One page of the rows placed at this station or matched by name (issue #14). The other
+  // two lists stay whole: they hold outages at nearby stations, a handful at most.
+  const { rows: outages, paging } = page(allOutages, "get_accessibility_outages", args);
 
   // Caveats only for rows this answer actually returns. Rows are compared by
   // equipment and dates, since the shaped rows are copies.
@@ -933,7 +1013,8 @@ async function getAccessibilityOutages(args: {
       : query
         ? "station name, matched loosely — MTA reports these outages with a free-text station name, not a GTFS stop_id, and the two spellings do not always agree. Pass stop_id to place rows by equipment ID instead."
         : null,
-    outage_count: outages.length,
+    outage_count: allOutages.length,
+    paging,
     rows_in_feed: rows.length,
     rows_without_station: query ? withoutStation : null,
     feed_note: date
@@ -944,7 +1025,7 @@ async function getAccessibilityOutages(args: {
     no_match_note: noMatchNote(
       query,
       args.route_id ?? null,
-      outages.length,
+      allOutages.length,
       otherStation?.length ?? 0,
       complex?.length ?? 0,
       rows,
@@ -962,7 +1043,7 @@ async function getAccessibilityOutages(args: {
     ...snapshotFooter(
       station ? ["equipment", "stations", "station_ada"] : query ? ["equipment"] : []
     ),
-    ...provenance(fetchedAt),
+    ...provenance(fetchedAt, undefined, ENE_DATA_SOURCE),
   };
 }
 

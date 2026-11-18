@@ -19,10 +19,22 @@ that happens with the release (CONTRIBUTING.md, "Releases").
 - Every tool carries MCP `annotations`: a `title`, `readOnlyHint: true`, and `openWorldHint`
   (`true` for the three tools that read MTA's feeds, `false` for `resolve_station`). Each MTA
   tool also has a `title`. (#10)
-- A test caps the size of the tool list plus the server instructions at 18,800 characters. (#11)
+- `limit` and `offset` on `get_service_alerts` (default 20, maximum 100), `resolve_station`
+  (default 10, maximum 50) and `get_accessibility_outages` (default 50, maximum 200), with the
+  bounds in each input schema. A limit over the maximum is an error. Each answer gains a
+  `paging` block: `total`, `returned`, `offset`, `limit`, `next_offset` and `showing` ("Showing
+  20 of 63 alerts (1 to 20). More are available: call again with offset 20."). (#14)
+- `resolve_station` answers carry `data_source` and `disclaimer`, like the other tools. (#13)
+- `data/SHA256SUMS`: the SHA-256 of each bundled snapshot, rewritten by both update scripts
+  and by `scripts/data-checksums.mjs`, and checked by `npm test`. (#15)
+- A test caps the size of the tool list plus the server instructions. (#11)
 
 ### Changed
 
+- `get_service_alerts` returns 20 alerts per call by default, where it used to return every
+  alert. `alert_count` and `disrupting_alert_count` still count every match. (#14)
+- `get_accessibility_outages` returns 50 rows per call by default, where it used to return
+  every row. `outage_count` now counts every match, not just the rows returned. (#14)
 - Errors are one plain sentence saying what went wrong and what to try. A wrongly typed or
   missing argument is named (it used to return zod's raw issue list as JSON). A failed request
   to MTA says whether it timed out, could not connect, or got an HTTP error, and what to do,
@@ -30,6 +42,14 @@ that happens with the release (CONTRIBUTING.md, "Releases").
   tool name lists the tools there are. Uses the shared `toolError`. (#12)
 - Shared files updated: `src/betanyc-tools.ts` 1.5.0, `scripts/whats_changed.py` and
   `scripts/mcp_shared/data-sources.schema.json` 1.4.1. Copied unchanged. (#9)
+
+### Fixed
+
+- `get_accessibility_outages` named the subway service-alerts feed as its `data_source`. It
+  now names MTA's elevator and escalator outage feeds, and `check_route_on_date` with
+  `include_accessibility` names both feeds it read. (#13)
+- `resolve_station`'s `match_count` stopped at 10. It now counts every station that matches,
+  and the candidates come in pages. (#14)
 
 ## [0.3.0] — 2026-11-16
 

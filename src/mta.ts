@@ -31,6 +31,10 @@ export const ENE_UPCOMING_URL = `${BASE}/nyct%2Fnyct_ene_upcoming.json`;
 
 export const DATA_SOURCE =
   "MTA service alerts (GTFS-realtime JSON with Mercury extensions), https://api.mta.info/#/serviceAlerts";
+export const ENE_DATA_SOURCE =
+  "MTA elevator and escalator outage feeds (current and upcoming, JSON), https://api.mta.info/#/EAndEFeeds";
+export const STATIONS_DATA_SOURCE =
+  "MTA regular subway GTFS (static schedule data, a dated copy bundled with this server), https://rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip; station ADA status from MTA Subway Stations on data.ny.gov (a dated copy), https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f";
 export const DISCLAIMER =
   "Unofficial. BetaNYC is not the MTA and makes no claim that this data is accurate, complete, or timely. Confirm service at https://www.mta.info before you travel.";
 
@@ -591,7 +595,7 @@ export function resolveStationMatches(
         a.stop_name.length - b.stop_name.length ||
         (a.stop_id < b.stop_id ? -1 : 1)
     )
-    .slice(0, opts.limit ?? 10);
+    .slice(0, opts.limit ?? Infinity);
 }
 
 export type StationResolution =

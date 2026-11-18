@@ -174,6 +174,7 @@ questions like *what's going on with the Lexington Avenue line this weekend?*
 | `alert_type` | string | no | Exact MTA `alert_type`, e.g. `"Planned - Stops Skipped"` |
 | `planned_only` | boolean | no | Only planned work (entity id begins `lmm:planned_work:`) |
 | `effect` | string | no | One of `reduced`, `changed`, `delay`, `informational`, `added`, `added_at_local_stops`, `unknown` |
+| `limit`, `offset` | integer | no | Page through the alerts: 20 by default, at most 100. `paging.showing` says how many there are |
 
 ```json
 { "route_id": "6", "date": "2026-09-19" }
@@ -188,6 +189,7 @@ serving each. It reads the bundled station list and makes no network call.
 |---|---|---|---|
 | `query` | string | yes | Station name or fragment, e.g. `"68 St"` |
 | `route_id` | string | no | Restrict to stations this route serves. This is how you narrow an ambiguous name |
+| `limit`, `offset` | integer | no | Page through the candidates: 10 by default, at most 50 |
 
 ```json
 { "query": "125 St", "route_id": "6" }
@@ -229,6 +231,7 @@ Elevator and escalator outages.
 | `route_id` | string | no | Only outages whose `trainno` includes this route. `6X`, `7X`, and `FX` count as `6`, `7`, and `F`; the shuttles `GS`, `FS`, and `H` count as `S` |
 | `date` | string | no | `YYYY-MM-DD`. Outages in effect now or scheduled that overlap that day in New York time. Can't be combined with `upcoming: true` |
 | `upcoming` | boolean | no | `false` (default) for outages in effect now, `true` for scheduled ones |
+| `limit`, `offset` | integer | no | Page through the outages: 50 by default, at most 200 |
 
 ```json
 { "stop_id": "A27", "date": "2026-09-26" }
@@ -364,7 +367,8 @@ npm run refresh-data    # runs both: npm run stations, npm run accessibility-dat
 npm test                # checks the new files still join up
 ```
 
-This changes tracked files in `data/`. Run `git restore data/` before your next
+This changes tracked files in `data/`, including `data/SHA256SUMS`, the
+checksum of each file, which `npm test` checks. Run `git restore data/` before your next
 `git pull`, then refresh again. Then restart your MCP client so it loads the
 new files.
 

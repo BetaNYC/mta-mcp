@@ -23,7 +23,9 @@ test("openWorldHint is true exactly for the tools that call MTA's live feeds", (
 // test/tool-size.test.mjs. Measured 2026-11-18 at 17,974 characters (shared module 1.5.0,
 // annotations added); the budget is that plus about 5%. Raise it only on purpose, with a
 // dated line here saying why, and put text several tools share in the instructions.
-const BUDGET_CHARS = 18_800;
+// Raised on purpose 2026-11-18 (issue #14): limit and offset on three list tools, with their
+// bounds in the schema. Measured 18,827 characters; the budget is that plus about 5%.
+const BUDGET_CHARS = 19_800;
 
 test("tools/list plus instructions stays within the size budget", () => {
   const size = toolListSize(TOOLS, INSTRUCTIONS);

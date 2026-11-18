@@ -45,10 +45,33 @@ Every tool that reads a live feed adds these fields:
 | `feed_timestamp_iso` | The same, as ISO 8601 |
 | `may_not_be_realtime` | Always `true`. MTA publishes no refresh cadence, and the cache alone can add a minute |
 | `staleness_note` | The same point, in words, with the cache length |
-| `data_source` | Where the data came from |
+| `data_source` | The feed or feeds this answer read, with a link: the service-alerts feed, the elevator and escalator feeds, or both |
 | `disclaimer` | That this is unofficial and riders should confirm at mta.info. Required by MTA's terms |
 
-`resolve_station` reads no feed, so it has a `station_data` block instead.
+`resolve_station` reads no feed, so it has a `station_data` block instead,
+plus `data_source` (the bundled station list and ADA status, with links) and
+`disclaimer`.
+
+## Lists come in pages
+
+`get_service_alerts`, `resolve_station` and `get_accessibility_outages` take
+`limit` and `offset`:
+
+| Tool | Default `limit` | Maximum |
+|---|---|---|
+| `get_service_alerts` | 20 | 100 |
+| `resolve_station` | 10 | 50 |
+| `get_accessibility_outages` | 50 | 200 |
+
+A `limit` over the maximum is an error, not a quiet cut. The counts
+(`alert_count`, `disrupting_alert_count`, `match_count`, `outage_count`) always
+cover every match, not just the page. Each answer has a `paging` block:
+`total`, `returned`, `offset`, `limit`, `next_offset` (`null` on the last
+page) and `showing`, a sentence like "Showing 20 of 63 alerts (1 to 20). More
+are available: call again with offset 20."
+
+`check_route_on_date` is not paged: its answer is about one route on one day,
+and `disrupted` has to rest on every matching alert.
 
 Answers that use a bundled data.ny.gov snapshot also carry `ada_data` (station
 ADA status) or `inventory_data` (the elevator and escalator inventory):
@@ -221,9 +244,12 @@ Every alert active on a date, with optional filters.
 | `alert_type` | string | no | Exact MTA status, like `"Planned - Stops Skipped"`. Must match exactly |
 | `planned_only` | boolean | no | Only scheduled work (`lmm:planned_work:` ids) |
 | `effect` | string | no | One of `reduced`, `changed`, `delay`, `informational`, `added`, `added_at_local_stops`, `unknown` |
+| `limit` | integer | no | Most alerts to return, 1 to 100. Default 20 |
+| `offset` | integer | no | Skip this many first. Default 0 |
 
-All filters combine. With none, you get every alert on every route that day.
-On 2026-09-22 that was about 20,000 tokens, so filter when you can.
+All filters combine. With none, you get every alert on every route that day,
+20 at a time. On 2026-09-22 all of them came to about 20,000 tokens, so filter
+when you can.
 
 ### The answer
 
@@ -231,8 +257,9 @@ On 2026-09-22 that was about 20,000 tokens, so filter when you can.
 |---|---|
 | `date` | The date used |
 | `filters` | The filters applied |
-| `alert_count` | Alerts returned |
+| `alert_count` | Alerts that match, on every page |
 | `disrupting_alert_count` | How many of those count as disruptions |
+| `paging` | This page: `total`, `returned`, `offset`, `limit`, `next_offset`, `showing` |
 | `unknown_alert_types` | Statuses this server didn't recognize |
 | `known_alert_types` | Every status in the effect table, so you can see what `alert_type` accepts |
 | `alerts` | The alerts, with the [alert fields](#the-alert-fields) |
@@ -251,6 +278,8 @@ no network call.
 |---|---|---|---|
 | `query` | string | yes | Station name or part of one |
 | `route_id` | string | no | Only stations this route serves |
+| `limit` | integer | no | Most candidates to return, 1 to 50. Default 10 |
+| `offset` | integer | no | Skip this many first. Default 0 |
 
 ### How names are matched
 
@@ -264,15 +293,16 @@ punctuation removed. Then:
 | 60 | Your words appear together somewhere in the name |
 | 40 | All your words appear, in any order |
 
-Matches are sorted by score, then shorter names first, then by `stop_id`. At
-most 10 are returned.
+Matches are sorted by score, then shorter names first, then by `stop_id`, and
+returned 10 at a time.
 
 ### The answer
 
 | Field | Meaning |
 |---|---|
 | `query`, `route_id` | What you asked |
-| `match_count` | Candidates returned (at most 10) |
+| `match_count` | Every station that matches (before 0.4.0 it stopped at 10) |
+| `paging` | This page: `total`, `returned`, `offset`, `limit`, `next_offset`, `showing` |
 | `unambiguous` | `true` if there's one candidate, or the first scores higher than the second |
 | `candidates` | `{stop_id, stop_name, lat, lon, routes, score, accessibility}`, best first |
 | `note` | What to do when it's ambiguous, otherwise `null` |
@@ -303,6 +333,8 @@ in [docs/accessibility.md](accessibility.md).
 | `route_id` | string | no | Only rows whose `trainno` includes this route. `6X`, `7X`, and `FX` count as `6`, `7`, and `F`; `GS`, `FS`, and `H` count as `S` |
 | `date` | string | no | `YYYY-MM-DD`. Outages in effect now or scheduled whose window overlaps that day in New York time |
 | `upcoming` | boolean | no | `false` (default) for outages in effect now, `true` for scheduled ones |
+| `limit` | integer | no | Most outages to return, 1 to 200. Default 50 |
+| `offset` | integer | no | Skip this many first. Default 0 |
 
 `date` with `upcoming: true` is an error. `upcoming: false`, the default, is
 accepted with `date`. A date query reads the current feed alone, which relies on

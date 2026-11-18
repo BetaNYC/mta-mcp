@@ -163,7 +163,8 @@ an empty list.
 | `route_note` | A warning when your route matched `S`, since the feed doesn't say which shuttle. Otherwise `null` |
 | `station_accessibility` | With `stop_id`, the station's ADA status. See [Station accessibility](#station-accessibility). `null` without one |
 | `matched_by` | How rows were matched: by equipment ID first with a `stop_id`, or by name with `station`. `null` if you didn't filter by station |
-| `outage_count` | Outages returned in `outages` |
+| `outage_count` | Outages that match, on every page. `outages` holds one page of them: 50 by default, at most 200 (`limit`, `offset`) |
+| `paging` | This page: `total`, `returned`, `offset`, `limit`, `next_offset`, and `showing`, a sentence saying how many there are and how to get the rest |
 | `rows_in_feed` | Rows read from the feed before any filter. For `upcoming: false`, that's after removing the scheduled rows |
 | `feed_note` | Which kind of outage this answer covers |
 | `no_match_note` | When a station or route search returns nothing, why that isn't proof of no outage and what to try next. `null` otherwise |

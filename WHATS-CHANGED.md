@@ -7,12 +7,14 @@ This page lists the changes to mta-mcp that a reader would notice: new tools, ne
 
 mta-mcp is not published to npm. You run it from your own copy of the repository, so a change reaches you when you update that copy and rebuild it. To report a bug in this server or ask for a new feature, [open an issue on GitHub](https://github.com/BetaNYC/mta-mcp/issues).
 
-## Unreleased: Tools say they only read, and errors say what to try
+## Unreleased: Lists come in pages, and elevator answers name the right source
 
-- **Tags:** MCP
-- **What changed:** Every tool now tells your AI app that it only reads and never changes anything, and whether it reaches out to MTA's live feeds or answers from the copies kept in the repository. Apps can use this to skip asking you before each call. Each tool also has a short, plain title. When something goes wrong, the answer is now one plain sentence saying what happened and what to try: which question was asked the wrong way, or whether MTA's feed timed out, could not be reached or sent back an error.
+- **Tags:** MCP, Correction
+- **What changed:** Long answers now come in pages. A day of service alerts comes 20 at a time, elevator and escalator outages 50 at a time, and station matches 10 at a time, and each answer says how many there are in all and how to get the next page. The totals always count everything, not just the page. Answers about elevators and escalators now name the feed they came from, MTA's elevator and escalator outage feeds; they used to name the service-alerts feed by mistake. A station search now says how many stations match in all; it used to stop counting at 10. Every tool now tells your AI app that it only reads and never changes anything, and whether it reaches out to MTA's live feeds or answers from the copies kept in the repository. When something goes wrong, the answer is one plain sentence saying what happened and what to try. The copies of MTA's station and elevator data kept in the repository now carry a checksum, so a damaged or hand-edited copy is caught.
+- **If you used the old numbers:** If you cited where an elevator or escalator answer came from, the source was MTA's elevator and escalator outage feeds, not the service-alerts feed. If you relied on a station search's match count, it was never more than 10; search again for the full count. No alert, outage or station figure was wrong.
+- **Who it affects:** Anyone who quoted the data source of an elevator or escalator answer, or who reads the full list of alerts or outages: ask for the next page to see the rest.
 - **MCP version:** [mta-mcp 0.4.0](CHANGELOG.md)
-- **More detail:** [Tool reference](docs/tools.md)
+- **More detail:** [Tool reference](docs/tools.md) · [Lists come in pages](docs/tools.md#lists-come-in-pages)
 
 ## 2026-11-16: Ask where the data comes from, and BetaNYC's additions are marked
 

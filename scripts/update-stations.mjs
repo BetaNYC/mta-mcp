@@ -29,6 +29,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { writeChecksums } from "./data-checksums.mjs";
 
 export const GTFS_SUBWAY_ZIP_URL =
   "https://rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip";
@@ -248,7 +249,8 @@ function main(argv) {
   }
 
   writeFileSync(OUT_PATH, `${JSON.stringify(payload, null, 2)}\n`);
-  process.stdout.write(`Wrote ${payload.count} stations to ${OUT_PATH}\n`);
+  writeChecksums();
+  process.stdout.write(`Wrote ${payload.count} stations to ${OUT_PATH}, and data/SHA256SUMS\n`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

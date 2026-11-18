@@ -264,6 +264,13 @@ ADA row, that every equipment code in the saved outage feeds is placed at a
 station, and that the field names haven't changed. Review the diff: each
 record is on its own line, so a refresh shows only what changed.
 
+Both commands also rewrite `data/SHA256SUMS`, the SHA-256 of each file in
+`data/`, and `npm test` fails if a file no longer matches it. Each file
+already records when it was pulled (`generated_at`, `source.data_pulled_at`);
+the checksum records its exact bytes, so a hand edit or a half-written file is
+caught. After changing anything in `data/` another way, run
+`node scripts/data-checksums.mjs` (or `--check` to only compare).
+
 `npm run refresh-data` runs both commands.
 
 Nothing refreshes the snapshots for you: the server never fetches them, and
