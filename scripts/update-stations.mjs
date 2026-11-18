@@ -25,6 +25,7 @@
 // times a year"). This is a maintenance script, not runtime — it may shell out.
 
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
@@ -198,6 +199,17 @@ function downloadZip() {
   return { zip, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
+/**
+ * Where the stations came from, for a reader: the MTA file and its SHA-256.
+ * Never the path the zip sat at on disk, which names a machine and a user.
+ */
+export function zipProvenance(fromLocalZip, zipBytes) {
+  return {
+    generated_from: `${fromLocalZip ? "saved copy" : "download"} of ${GTFS_SUBWAY_ZIP_URL}`,
+    source_sha256: createHash("sha256").update(zipBytes).digest("hex"),
+  };
+}
+
 function main(argv) {
   const fromIdx = argv.indexOf("--from-zip");
   const localZip = fromIdx !== -1 ? argv[fromIdx + 1] : null;
@@ -229,7 +241,7 @@ function main(argv) {
       generated_at: new Date().toISOString(),
       source_url: GTFS_SUBWAY_ZIP_URL,
       source_files: ["stops.txt", "trips.txt", "stop_times.txt"],
-      generated_from: localZip ? `local zip: ${localZip}` : "downloaded zip",
+      ...zipProvenance(Boolean(localZip), readFileSync(zipPath)),
       filter: "location_type=1 (GTFS parent stations)",
       // resolve_station reads this flag and refuses route_id filtering when it
       // is false, rather than ignoring the parameter and answering a different

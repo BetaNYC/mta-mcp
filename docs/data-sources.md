@@ -271,6 +271,13 @@ the checksum records its exact bytes, so a hand edit or a half-written file is
 caught. After changing anything in `data/` another way, run
 `node scripts/data-checksums.mjs` (or `--check` to only compare).
 
+Each file says where its data came from as a link, never as a path on the
+machine that built it: `data/stations.json` records `generated_from` (the
+MTA zip's URL) and `source_sha256` (the zip's SHA-256), and the other two
+record the Socrata query they were pulled with. `npm test` fails if any file
+in `data/` or `test/fixtures/` contains a local path or the username running
+the tests.
+
 `npm run refresh-data` runs both commands.
 
 Nothing refreshes the snapshots for you: the server never fetches them, and

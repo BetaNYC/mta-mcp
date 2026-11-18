@@ -58,6 +58,11 @@ that happens with the release (CONTRIBUTING.md, "Releases").
   `include_accessibility` names both feeds it read. (#13)
 - `resolve_station`'s `match_count` stopped at 10. It now counts every station that matches,
   and the candidates come in pages. (#14)
+- `data/stations.json` recorded the local path of the zip it was built from, which named a
+  machine and a user. `scripts/update-stations.mjs` now records the MTA zip's URL and its
+  SHA-256 (`source_sha256`) instead, and a test fails if any bundled data file contains a local
+  path or username. The current snapshot's field was corrected by hand; its zip is gone, so it
+  has no `source_sha256` until the next refresh. Station records are unchanged. (#27)
 
 ## [0.3.0] — 2026-11-16
 
