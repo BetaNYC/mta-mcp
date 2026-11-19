@@ -464,16 +464,29 @@ async function checkRouteOnDate(args: {
     // only honest disambiguator, and a remaining tie is returned, not guessed.
     const resolved = resolveStationStrict(args.station, args.route_id);
     if ("candidates" in resolved) {
+      // Only the first 10 candidates are listed; candidate_count counts them all, and
+      // resolve_station pages through every match. Nothing is fetched for this answer: it comes
+      // from the bundled station and ADA copies, so it names them as its source, dated in
+      // snapshot_as_of, and carries no fetched_at.
+      const shown = resolved.candidates.slice(0, LIMITS.resolve_station.default);
+      const total = resolved.candidates.length;
       return {
         route_id: args.route_id,
         date,
         resolved: false,
         reason: ambiguityReason(args.station, args.route_id, resolved.reason),
-        // ponytail: first 10 only; resolve_station pages through the rest.
-        candidate_count: resolved.candidates.length,
-        candidates: withAccessibility(resolved.candidates.slice(0, LIMITS.resolve_station.default)),
+        candidate_count: total,
+        candidates_showing:
+          `Showing ${shown.length} of ${total} candidate stations.` +
+          (shown.length < total
+            ? ` For the rest, call resolve_station with query '${args.station}'${
+                resolved.reason === "ambiguous" ? ` and route_id '${args.route_id}'` : ""
+              }, which lists every match in pages.`
+            : ""),
+        candidates: withAccessibility(shown),
         ...snapshotFooter(["stations", "station_ada"]),
-        ...provenance(Date.now()),
+        data_source: STATIONS_DATA_SOURCE,
+        disclaimer: DISCLAIMER,
       };
     }
     station = resolved.station;
@@ -1234,7 +1247,9 @@ export function errorResult(err: unknown): ToolResult {
   if (err instanceof FeedError) {
     const feed = ` Feed: ${err.url}`;
     let message: string;
-    if (err.timedOut) {
+    if (err.notJson) {
+      message = `MTA's feed answered, but with a web page or other text instead of data. That usually means MTA's feed is down for maintenance. Try again in a few minutes. For service right now, check https://www.mta.info.${feed}`;
+    } else if (err.timedOut) {
       message = `MTA's feed did not answer within 15 seconds. Try again in a minute. For service right now, check https://www.mta.info.${feed}`;
     } else if (err.status === null) {
       message = `Could not reach MTA's feed (${err.message.replace(/^.*?: /, "")}). Check this computer's internet connection and try again.${feed}`;
@@ -1249,6 +1264,16 @@ export function errorResult(err: unknown): ToolResult {
     }
     return toolError(`${message}`, { upstreamBody: err.body });
   }
-  if (err instanceof Error) return toolError(`${err.message}`);
+  // The shared toolError passes the caller's message on as written (shared module 1.5.1), so
+  // a stack trace pasted into an error's message is dropped here: no stack reaches the answer.
+  if (err instanceof Error) return toolError(withoutStackFrames(err.message));
   return toolError(`The tool failed unexpectedly (${String(err)}). Please report a bug in this server at ${REPORT_BUG}.`);
+}
+
+/** A message with any stack-frame lines ("    at f (file.js:1:2)") taken out. */
+function withoutStackFrames(message: string): string {
+  return message
+    .split(/\r?\n/)
+    .filter((l) => !/^\s+at\s/.test(l))
+    .join("\n");
 }

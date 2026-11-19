@@ -60,6 +60,15 @@ BetaNYC is adding to each of its MCP servers.
 | `about_betanyc` | Who built this server, where to report a bug in this server or ask for a new feature, and BetaNYC's links |
 | `about_data` | Where each kind of data comes from, whether it is official, how current it is, its terms, and where to report an error, from [DATA-SOURCES.json](DATA-SOURCES.json) |
 
+**Changed in 0.4.0: two tools now answer one page at a time.**
+`get_service_alerts` and `get_accessibility_outages` used to return every
+alert or outage in one answer. Now they return one page: 20 alerts or 50
+outages by default. Each answer says "Showing N of M" in `paging.showing`, and
+the counts (`alert_count`, `outage_count`) still cover every match. To get the
+rest, call again with `offset` set to `paging.next_offset`, or ask for up to
+100 alerts or 200 outages at once with `limit`. Details:
+[Lists come in pages](docs/tools.md#lists-come-in-pages).
+
 Every field in every answer is documented in [docs/tools.md](docs/tools.md).
 Elevators and escalators have their own guide, including known gaps:
 [docs/accessibility.md](docs/accessibility.md).
@@ -560,7 +569,9 @@ station too.
 
 So the server doesn't guess. `resolve_station` returns every candidate, and
 `check_route_on_date` returns the candidate list without an answer when a name
-matches more than one station. Pass `route_id` to narrow it. Route membership
+matches more than one station. That list shows 10 stations at most;
+`candidate_count` gives the full number, and `resolve_station` pages through
+the rest. Pass `route_id` to narrow it. Route membership
 comes from MTA's static GTFS.
 
 ### Connected stations with different names aren't linked

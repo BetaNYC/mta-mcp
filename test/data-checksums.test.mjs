@@ -1,8 +1,11 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
-import { userInfo } from "node:os";
+import os from "node:os";
+import { syncBuiltinESMExports } from "node:module";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { DATA_DIR, SUMS_PATH, checksumsText } from "../scripts/data-checksums.mjs";
 import { GTFS_SUBWAY_ZIP_URL, zipProvenance } from "../scripts/update-stations.mjs";
 
@@ -29,42 +32,98 @@ test("every bundled snapshot records when it was pulled, and from where", () => 
 
 // No bundled file may record where it sat on someone's disk: a local path names a machine
 // and often a person. data/stations.json once did (`local zip: /private/tmp/...`).
-const LOCAL_PATH = /\/Users\/|-Users-|\/private\/(tmp|var)\/|\/home\/|\/var\/folders\/|\b[A-Za-z]:\\/;
-const BUNDLED_DIRS = [DATA_DIR, new URL("./fixtures", import.meta.url).pathname];
+//
+// The check is on path shapes only. It once also looked for this machine's username as a
+// substring, which failed `npm test` for anyone whose username is a short common word that
+// appears in a station name (a user named "park" and "Park Pl"). A path is what leaks a
+// username, and every path shape below is caught whatever the username is.
+const LOCAL_PATH =
+  /\/Users\/|-Users-|\/Volumes\/|\/private\/(tmp|var)\/|\/home\/|\/var\/folders\/|\b[A-Za-z]:[\\/](Users|Documents and Settings)[\\/]|\b[A-Za-z]:\\/;
+
+// A folder next to this file, as a path. fileURLToPath, not URL.pathname: pathname keeps
+// percent-escapes, so a checkout in a folder with a space ("mta mcp") would read "mta%20mcp".
+function localDir(relative, base = import.meta.url) {
+  return fileURLToPath(new URL(relative, base));
+}
+const BUNDLED_DIRS = [DATA_DIR, localDir("./fixtures")];
 
 function localPathsIn(text, isJson) {
   const hits = [];
   const check = (s) => {
-    if (typeof s !== "string") return;
-    if (LOCAL_PATH.test(s)) hits.push(s);
-    else if (USER.length >= 3 && s.toLowerCase().includes(USER)) hits.push(s);
+    if (typeof s === "string" && LOCAL_PATH.test(s)) hits.push(s);
   };
   // JSON: check decoded strings, so an escape like "\n" is not read as a backslash.
   if (isJson) JSON.parse(text, (k, v) => (check(k), check(v), v));
   else for (const line of text.split("\n")) check(line);
   return hits;
 }
-const USER = userInfo().username.toLowerCase();
 
-test("no bundled data file contains a local path or this machine's username", () => {
+test("no bundled data file contains a local path", () => {
   for (const dir of BUNDLED_DIRS) {
     for (const f of readdirSync(dir)) {
       const hits = localPathsIn(readFileSync(join(dir, f), "utf8"), f.endsWith(".json"));
-      assert.deepEqual(hits, [], `${dir}/${f} contains a local path or username`);
+      assert.deepEqual(hits, [], `${dir}/${f} contains a local path`);
     }
   }
 });
 
 test("the path check catches the forms it is meant to", () => {
-  for (const s of ["/Users/x/a.zip", "/private/tmp/a.zip", "/home/x/a", "C:\\Users\\x", "-Users-x-Code"]) {
+  const forms = [
+    "/Users/x/a.zip",
+    "/Volumes/Disk/x/a.zip",
+    "/private/tmp/a.zip",
+    "/private/var/folders/a",
+    "/var/folders/ab/T/a.zip",
+    "/home/x/a",
+    "C:\\Users\\x",
+    "C:/Users/x/a.zip",
+    "D:\\data\\a.zip",
+    "-Users-x-Code",
+    "file:///Users/x/a.zip",
+  ];
+  for (const s of forms) {
     assert.equal(localPathsIn(JSON.stringify({ generated_from: s }), true).length, 1, s);
   }
   assert.deepEqual(localPathsIn(JSON.stringify({ note: "Line one:\nline two", url: "https://a.b/c" }), true), []);
 });
 
+test("a station name holding a short common word is not a hit, whatever the username", () => {
+  // Pretend this machine's user is "park", as some people's is. Before the fix the check
+  // matched the username anywhere, so "Park Pl" and every other "Park" station failed npm test.
+  const real = os.userInfo;
+  os.userInfo = (...a) => ({ ...real(...a), username: "park" });
+  syncBuiltinESMExports();
+  try {
+    for (const name of ["Park Pl", "Bay Ridge Av", "Ozone Park-Lefferts Blvd", "Avenue H", "Prospect Av"]) {
+      assert.deepEqual(localPathsIn(JSON.stringify({ stop_name: name }), true), [], name);
+    }
+    const stations = readFileSync(join(DATA_DIR, "stations.json"), "utf8");
+    assert.match(stations, /"Park Pl"/, "the station list still has a name with the word in it");
+    assert.deepEqual(localPathsIn(stations, true), []);
+  } finally {
+    os.userInfo = real;
+    syncBuiltinESMExports();
+  }
+});
+
+test("a checkout folder with a space in its name is read as a real path", () => {
+  const base = "file:///srv/mta%20mcp/test/data-checksums.test.mjs";
+  assert.equal(localDir("./fixtures", base), "/srv/mta mcp/test/fixtures");
+});
+
 test("update-stations records the MTA file and its checksum, never the local zip path", () => {
-  const p = zipProvenance(true, Buffer.from("zip bytes"));
-  assert.equal(p.generated_from, `saved copy of ${GTFS_SUBWAY_ZIP_URL}`);
-  assert.match(p.source_sha256, /^[0-9a-f]{64}$/);
-  assert.equal(zipProvenance(false, Buffer.from("")).generated_from, `download of ${GTFS_SUBWAY_ZIP_URL}`);
+  const bytes = Buffer.from("zip bytes");
+  const sha = createHash("sha256").update(bytes).digest("hex");
+  const local = zipProvenance(true, bytes);
+  // --from-zip: the operator's file is not proven to be MTA's, so the record says whose it is.
+  assert.equal(
+    local.generated_from,
+    `local zip supplied by the operator with --from-zip, said to be a copy of ${GTFS_SUBWAY_ZIP_URL} (sha256 ${sha})`
+  );
+  assert.doesNotMatch(local.generated_from, /saved copy/);
+  assert.equal(local.source_sha256, sha);
+  assert.deepEqual(localPathsIn(JSON.stringify(local), true), []);
+  const dl = zipProvenance(false, Buffer.from(""));
+  assert.equal(dl.generated_from, `download of ${GTFS_SUBWAY_ZIP_URL}`);
+  assert.match(dl.source_sha256, /^[0-9a-f]{64}$/);
 });

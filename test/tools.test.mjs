@@ -5,6 +5,7 @@ import { INSTRUCTIONS, TOOLS, callTool } from "../dist/tools.js";
 import {
   ENE_CURRENT_URL,
   ENE_UPCOMING_URL,
+  STATIONS_DATA_SOURCE,
   SUBWAY_ALERTS_URL,
 } from "../dist/mta.js";
 import { parseStops, routesByParentStation, splitCsvLine } from "../scripts/update-stations.mjs";
@@ -174,6 +175,41 @@ test("check_route_on_date refuses to guess when a route serves two stations of o
     ["N10", "Q04"]
   );
   assert.equal(result.alerts, undefined, "no answer is given when the station is not resolved");
+});
+
+test("an unresolved station is answered from the bundled station files, with no request to MTA", async () => {
+  // Nothing may come from cache: a cached feed would hide a fetch.
+  const ttl = process.env.MTA_MCP_CACHE_TTL_MS;
+  process.env.MTA_MCP_CACHE_TTL_MS = "0";
+  fetchCount = 0;
+  try {
+    const result = await call("check_route_on_date", { route_id: "F", date: SAT, station: "St" });
+    assert.equal(fetchCount, 0, "no feed is read when the station is not resolved");
+    assert.equal(result.resolved, false);
+    // The source is the bundled station data, dated, not the service-alerts feed.
+    assert.equal(result.data_source, STATIONS_DATA_SOURCE);
+    assert.doesNotMatch(result.data_source, /serviceAlerts/);
+    assert.equal(result.fetched_at, undefined, "nothing was fetched, so there is no fetch time");
+    assert.equal(result.feed_timestamp, undefined);
+    assert.match(result.snapshot_as_of.stations, /^\d{4}-\d{2}-\d{2}$/);
+    assert.match(result.disclaimer, /Unofficial/);
+    // Cut to 10, and it says so.
+    assert.ok(result.candidate_count > 10, `candidate_count ${result.candidate_count}`);
+    assert.equal(result.candidates.length, 10);
+    assert.match(
+      result.candidates_showing,
+      new RegExp(`^Showing 10 of ${result.candidate_count} candidate stations\\. For the rest, call resolve_station with query 'St' and route_id 'F'`)
+    );
+  } finally {
+    if (ttl === undefined) delete process.env.MTA_MCP_CACHE_TTL_MS;
+    else process.env.MTA_MCP_CACHE_TTL_MS = ttl;
+  }
+});
+
+test("a short candidate list says it shows them all", async () => {
+  const result = await call("check_route_on_date", { route_id: "N", date: SAT, station: "86 St" });
+  assert.equal(result.candidate_count, 2);
+  assert.equal(result.candidates_showing, "Showing 2 of 2 candidate stations.");
 });
 
 test("the call's route_id narrows a shared station name to one station", async () => {

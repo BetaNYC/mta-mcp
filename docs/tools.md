@@ -70,6 +70,12 @@ cover every match, not just the page. Each answer has a `paging` block:
 page) and `showing`, a sentence like "Showing 20 of 63 alerts (1 to 20). More
 are available: call again with offset 20."
 
+Paging is not stable across feed refreshes: a fetched feed is reused for up
+to 60 seconds, so page 2 can come from a newer copy than page 1, and an alert
+or outage can move between pages, show up twice, or be skipped. For a full
+list, ask for one large page (`limit` up to the maximum) rather than many
+small ones.
+
 `check_route_on_date` is not paged: its answer is about one route on one day,
 and `disrupted` has to rest on every matching alert.
 
@@ -226,10 +232,19 @@ with no `disrupted` field:
 |---|---|
 | `resolved` | `false` |
 | `reason` | Which case this is: no station has that name, the name exists but not on this route, or several stations on this route tie |
-| `candidates` | The matching stations, with their routes, scores, and ADA status |
+| `candidate_count` | How many stations match, all of them |
+| `candidates_showing` | A sentence like "Showing 10 of 26 candidate stations." and, when some are left out, how to get the rest with `resolve_station` |
+| `candidates` | The first 10 matching stations at most, with their routes, scores, and ADA status. `candidate_count` gives the full number |
+| `snapshot_as_of` | The dates of the bundled station list and ADA status this answer came from |
+| `data_source`, `disclaimer` | The bundled station list and ADA status, with links, and the usual disclaimer |
 
-Pick one and call again with its `stop_id`. With `include_accessibility`, no
-elevator request is made until the station is resolved.
+The list is cut to 10, so a common name (`"St"`, `"Av"`) can match more
+stations than it shows; `resolve_station` with the same name pages through
+all of them. Pick one and call again with its `stop_id`.
+
+No feed is read for this answer: it comes from the bundled files alone, so it
+has no `fetched_at`. With `include_accessibility`, no elevator request is made
+until the station is resolved.
 
 ## `get_service_alerts`
 

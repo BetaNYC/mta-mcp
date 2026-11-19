@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { FeedError } from "../dist/mta.js";
+import { FeedError, setRequestTimeoutForTests } from "../dist/mta.js";
 import { callTool, errorResult } from "../dist/tools.js";
 
 // Every failure is an isError result with a plain sentence saying what went wrong and what
@@ -76,4 +76,66 @@ test("no stack trace reaches the answer", () => {
   const r = errorResult(err);
   assert.match(textOf(r), /^Error: something broke/);
   assert.doesNotMatch(textOf(r), STACK);
+});
+
+// A 200 that is not JSON, and a body that stalls. Each runs with the cache off, so the stub
+// is what answers.
+async function uncached(fn) {
+  const ttl = process.env.MTA_MCP_CACHE_TTL_MS;
+  process.env.MTA_MCP_CACHE_TTL_MS = "0";
+  try {
+    return await fn();
+  } finally {
+    if (ttl === undefined) delete process.env.MTA_MCP_CACHE_TTL_MS;
+    else process.env.MTA_MCP_CACHE_TTL_MS = ttl;
+    respond = () => new Response("{}", { status: 200 });
+  }
+}
+
+test("a 200 maintenance page is a plain sentence, not a JSON parse error", async () => {
+  await uncached(async () => {
+    let calls = 0;
+    const page = `<!doctype html><html><body><h1>Down for maintenance</h1>${"x".repeat(2000)}</body></html>`;
+    respond = () => {
+      calls += 1;
+      return new Response(page, { status: 200, headers: { "content-type": "text/html" } });
+    };
+    const r = await callTool("get_service_alerts", { date: "2026-09-19" });
+    assert.equal(r.isError, true);
+    const text = textOf(r);
+    assert.match(text, /^Error: MTA's feed answered, but with a web page or other text instead of data\./);
+    assert.match(text, /maintenance\. Try again in a few minutes\. For service right now, check https:\/\/www\.mta\.info\./);
+    assert.doesNotMatch(text, /SyntaxError|Unexpected token|is not valid JSON/);
+    assert.doesNotMatch(text, STACK);
+    const said = text.split("The source said: ")[1] ?? "";
+    assert.match(said, /Down for maintenance/);
+    assert.ok(said.replace(/… \(cut at 500 characters\)$/, "").length <= 500, `body is ${said.length} characters`);
+    assert.equal(calls, 1, "a non-JSON 200 is not retried");
+  });
+});
+
+test("a body that stalls after the headers times out with the timeout sentence", async () => {
+  setRequestTimeoutForTests(50);
+  try {
+    await uncached(async () => {
+      respond = () =>
+        new Response(
+          new ReadableStream({
+            start(controller) {
+              controller.enqueue(new TextEncoder().encode('{"entity": ['));
+              // Never closes: MTA sent the headers and part of the body, then stalled.
+            },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } }
+        );
+      const started = Date.now();
+      const r = await callTool("get_service_alerts", { date: "2026-09-19" });
+      assert.ok(Date.now() - started < 5000, "the deadline covers the body");
+      assert.equal(r.isError, true);
+      assert.match(textOf(r), /^Error: MTA's feed did not answer within 15 seconds\. Try again in a minute/);
+      assert.doesNotMatch(textOf(r), /SyntaxError|Unexpected end/);
+    });
+  } finally {
+    setRequestTimeoutForTests(null);
+  }
 });

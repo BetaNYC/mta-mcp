@@ -49,7 +49,8 @@ export const DISCLAIMER =
 //   2. Single-flight so concurrent calls for one URL share one request
 //   3. A process-wide 1 s minimum interval between ANY two upstream requests
 //   4. Bounded retry (2 attempts, 1 s then 2 s) honoring Retry-After
-//   5. A 15 s request timeout so a hung request cannot pin the gate
+//   5. A 15 s request timeout, covering the body as well as the headers, so a
+//      hung request cannot pin the gate
 //   6. An identifying User-Agent, so MTA can reach us about load
 //
 // There is deliberately no background polling, no prefetch, and no warm-up
@@ -79,6 +80,14 @@ function envMs(name: string, fallback: number): number {
 export const cacheTtlMs = (): number => envMs("MTA_MCP_CACHE_TTL_MS", DEFAULT_CACHE_TTL_MS);
 export const minIntervalMs = (): number =>
   envMs("MTA_MCP_MIN_INTERVAL_MS", DEFAULT_MIN_INTERVAL_MS);
+
+let requestTimeoutMs = REQUEST_TIMEOUT_MS;
+
+/** Tests only: a shorter request timeout, so a stalled body can be tested in
+ * milliseconds. Pass null to restore 15 s. It changes no fetch, retry or wait. */
+export function setRequestTimeoutForTests(ms: number | null): void {
+  requestTimeoutMs = ms ?? REQUEST_TIMEOUT_MS;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -130,49 +139,84 @@ export class FeedError extends Error {
     readonly url: string,
     readonly status: number | null,
     readonly body: string,
-    readonly timedOut: boolean = false
+    readonly timedOut: boolean = false,
+    /** MTA answered 200, but the body was not JSON: a maintenance page, say. */
+    readonly notJson: boolean = false
   ) {
     super(message);
     this.name = "FeedError";
   }
 }
 
-/** Mechanisms 4 + 5 + 6: one attempt, with a timeout and identifying headers. */
-async function attempt(url: string): Promise<Response> {
+const TIMED_OUT = Symbol("timed out");
+
+/** One answer from MTA, and a way to read its body under the same deadline. */
+type Attempt = { res: Response; text: () => Promise<string> };
+
+/**
+ * Mechanisms 4 + 5 + 6: one attempt, with a timeout and identifying headers.
+ * The 15 s deadline runs from the request to the end of the body, so a server
+ * that sends headers and then stalls is cut off too.
+ */
+async function attempt(url: string): Promise<Attempt> {
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  let expire: () => void = () => {};
+  const expired = new Promise<typeof TIMED_OUT>((resolve) => {
+    expire = () => resolve(TIMED_OUT);
+  });
+  const timer = setTimeout(() => {
+    controller.abort();
+    expire();
+  }, requestTimeoutMs);
+  const timeoutError = () =>
+    new FeedError(
+      `MTA feed request timed out after ${requestTimeoutMs / 1000}s for ${url}`,
+      url,
+      null,
+      "",
+      true
+    );
+  let res: Response;
   try {
-    return await fetch(url, {
+    res = await fetch(url, {
       headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
       signal: controller.signal,
     });
   } catch (err) {
-    // Not retried, as before: only an HTTP answer of 429 or 5xx is.
-    const timedOut = controller.signal.aborted;
-    const reason = err instanceof Error ? err.message : String(err);
-    throw new FeedError(
-      timedOut
-        ? `MTA feed request timed out after ${REQUEST_TIMEOUT_MS / 1000}s for ${url}`
-        : `MTA feed request failed for ${url}: ${reason}`,
-      url,
-      null,
-      "",
-      timedOut
-    );
-  } finally {
     clearTimeout(timer);
+    // Not retried, as before: only an HTTP answer of 429 or 5xx is.
+    if (controller.signal.aborted) throw timeoutError();
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new FeedError(`MTA feed request failed for ${url}: ${reason}`, url, null, "", false);
   }
+  const text = async (): Promise<string> => {
+    try {
+      const out = await Promise.race([res.text(), expired]);
+      if (out === TIMED_OUT) throw timeoutError();
+      return out;
+    } catch (err) {
+      if (err instanceof FeedError) throw err;
+      if (controller.signal.aborted) throw timeoutError();
+      const reason = err instanceof Error ? err.message : String(err);
+      throw new FeedError(`MTA feed body could not be read for ${url}: ${reason}`, url, null, "", false);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  return { res, text };
 }
 
-async function errorFromResponse(url: string, res: Response): Promise<FeedError> {
+function cutBody(text: string): string {
+  const body = text.trim();
+  return body.length > MAX_ERROR_BODY_CHARS ? `${body.slice(0, MAX_ERROR_BODY_CHARS)}… (truncated)` : body;
+}
+
+async function errorFromResponse(url: string, { res, text }: Attempt): Promise<FeedError> {
   let body = "";
   try {
-    body = (await res.text()).trim();
+    body = cutBody(await text());
   } catch {
-    // body unreadable; fall through with empty text
-  }
-  if (body.length > MAX_ERROR_BODY_CHARS) {
-    body = `${body.slice(0, MAX_ERROR_BODY_CHARS)}… (truncated)`;
+    // body unreadable or too slow; fall through with empty text
   }
   let message = `MTA feed error ${res.status} ${res.statusText} for ${url}`;
   if (res.status === 404) {
@@ -216,13 +260,30 @@ export async function fetchFeed(url: string): Promise<FeedResult> {
     let wait = 0;
     for (let tryNo = 0; tryNo <= MAX_RETRIES; tryNo++) {
       if (wait > 0) await sleep(wait);
-      const res = await throughGate(() => attempt(url));
+      const answer = await throughGate(() => attempt(url));
+      const { res } = answer;
       if (res.ok) {
-        const entry = { fetchedAt: Date.now(), body: await res.json() };
+        const raw = await answer.text();
+        let body: unknown;
+        try {
+          body = JSON.parse(raw);
+        } catch {
+          // A 200 that is not JSON (MTA's maintenance page, say). Not cached and
+          // not retried: the next tool call asks again, no sooner than before.
+          throw new FeedError(
+            `MTA feed answered ${res.status} for ${url}, but not with JSON`,
+            url,
+            res.status,
+            cutBody(raw),
+            false,
+            true
+          );
+        }
+        const entry = { fetchedAt: Date.now(), body };
         cache.set(url, entry);
         return entry;
       }
-      lastError = await errorFromResponse(url, res);
+      lastError = await errorFromResponse(url, answer);
       if (!isRetryable(res.status)) throw lastError;
       // Backoff is 1 s then 2 s. A Retry-After can extend that but never
       // shorten it, so honoring the server cannot make us more aggressive.

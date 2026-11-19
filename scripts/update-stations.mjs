@@ -202,11 +202,18 @@ function downloadZip() {
 /**
  * Where the stations came from, for a reader: the MTA file and its SHA-256.
  * Never the path the zip sat at on disk, which names a machine and a user.
+ *
+ * With --from-zip the zip is whatever file the operator passed, so the record
+ * does not claim it is MTA's: it says the operator supplied it as a copy of the
+ * MTA file, and gives its SHA-256 so anyone can compare it with MTA's.
  */
 export function zipProvenance(fromLocalZip, zipBytes) {
+  const sha256 = createHash("sha256").update(zipBytes).digest("hex");
   return {
-    generated_from: `${fromLocalZip ? "saved copy" : "download"} of ${GTFS_SUBWAY_ZIP_URL}`,
-    source_sha256: createHash("sha256").update(zipBytes).digest("hex"),
+    generated_from: fromLocalZip
+      ? `local zip supplied by the operator with --from-zip, said to be a copy of ${GTFS_SUBWAY_ZIP_URL} (sha256 ${sha256})`
+      : `download of ${GTFS_SUBWAY_ZIP_URL}`,
+    source_sha256: sha256,
   };
 }
 
