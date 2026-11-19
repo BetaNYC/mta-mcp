@@ -9,10 +9,9 @@ This package is not published to npm. Version numbers track the local build. See
 
 ## [Unreleased]
 
-## [0.4.0] — Unreleased
+## [0.4.0] — 2026-11-19
 
-BetaNYC's MCP practices (epic #19). The version number in `package.json` is not yet bumped;
-that happens with the release (CONTRIBUTING.md, "Releases").
+BetaNYC's MCP practices (epic #19).
 
 ### Added
 

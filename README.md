@@ -1,6 +1,6 @@
 # mta-mcp
 
-> ⚠️ **Alpha, v0.3.0.** This is early code. We are sharing it now to find out
+> ⚠️ **Alpha, v0.4.0.** This is early code. We are sharing it now to find out
 > what breaks. Tool names, parameters, and response shapes may change without
 > notice, so please don't build anything important on it yet.
 >
