@@ -9,7 +9,7 @@ This package is not published to npm. Version numbers track the local build. See
 
 ## [Unreleased]
 
-## [0.5.0] — Unreleased
+## [0.5.0] — 2026-11-19
 
 A live alert with no end time is current now, not a forecast for a later date.
 
