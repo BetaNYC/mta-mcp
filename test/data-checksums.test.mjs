@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { readFileSync, readdirSync } from "node:fs";
 import os from "node:os";
@@ -65,6 +66,62 @@ test("no bundled data file contains a local path", () => {
       assert.deepEqual(hits, [], `${dir}/${f} contains a local path`);
     }
   }
+});
+
+// A Python cache file (scripts/__pycache__/*.pyc) records the full path of the checkout that
+// made it, so committing one leaks a machine's folder names. One was committed twice, by
+// running the What's changed checks. .gitignore keeps them out; this test catches one that is
+// added anyway (git add -f). It reads git's own list of tracked files.
+const CACHE_FILE = /(^|\/)__pycache__\/|\.pyc$/;
+
+function trackedCacheFiles(files) {
+  return files.filter((f) => CACHE_FILE.test(f));
+}
+
+function trackedFiles() {
+  try {
+    const out = execFileSync("git", ["ls-files", "-z"], {
+      cwd: localDir("../"),
+      encoding: "utf8",
+      stdio: ["ignore", "pipe", "ignore"],
+    });
+    return out.split("\0").filter(Boolean);
+  } catch {
+    return null; // no git, or not a git checkout (a tarball, say)
+  }
+}
+
+test("no tracked file is a Python cache file", (t) => {
+  const files = trackedFiles();
+  if (files === null) {
+    t.skip("git is not available here, or this is not a git checkout, so tracked files cannot be listed");
+    return;
+  }
+  assert.ok(files.length > 0, "git listed no tracked files");
+  assert.deepEqual(
+    trackedCacheFiles(files),
+    [],
+    "a Python cache file is tracked: git rm it (it records the local path of the checkout that made it)"
+  );
+});
+
+test("the cache-file check catches the forms it is meant to", () => {
+  assert.deepEqual(
+    trackedCacheFiles([
+      "scripts/__pycache__/whats_changed.cpython-315.pyc",
+      "__pycache__/x.cpython-312.pyc",
+      "scripts/tests/__pycache__/README",
+      "a/b/stray.pyc",
+      "scripts/whats_changed.py",
+      "docs/pycache-notes.md",
+    ]),
+    [
+      "scripts/__pycache__/whats_changed.cpython-315.pyc",
+      "__pycache__/x.cpython-312.pyc",
+      "scripts/tests/__pycache__/README",
+      "a/b/stray.pyc",
+    ]
+  );
 });
 
 test("the path check catches the forms it is meant to", () => {
