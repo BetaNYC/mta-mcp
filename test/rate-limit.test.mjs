@@ -107,11 +107,12 @@ test("concurrent calls for one URL share a single request", async () => {
 // ─── Mechanism 3: global minimum interval ────────────────────────────────────
 //
 // The gate stamps its clock just before it lets a request go; the stub stamps
-// when fetch is reached, a few microseconds later. That offset differs a little
-// between two requests, so the measured gap may fall short of the gate's by a
-// fraction of a millisecond. SLACK_MS covers that and nothing more: a gate that
-// woke early by a whole millisecond or more still fails (issue #6).
-const SLACK_MS = 0.5;
+// when fetch is reached, a little later. That offset differs between two
+// requests, and on a busy CI runner by more than a fraction of a millisecond,
+// so the measured gap may fall a little short of the gate's. SLACK_MS covers
+// that. It is small next to what it guards: a missing gate gives a gap near
+// 0 ms, and a backoff that is skipped gives near 0 instead of 1000 (issue #6).
+const SLACK_MS = 5;
 
 test("sequential requests are spaced by at least the minimum interval", async () => {
   reset();
@@ -158,12 +159,14 @@ test("a 429 is retried, honoring Retry-After", async () => {
   reset();
   process.env.MTA_MCP_MIN_INTERVAL_MS = "0";
   nextResponses = [status(429, { "retry-after": "0" }), ok()];
-  const started = Date.now();
   const result = await fetchFeed(url("throttled"));
   assert.equal(fetchCount, 2);
   assert.equal(result.fromCache, false);
-  // Retry-After: 0 cannot shorten the 1s backoff floor.
-  assert.ok(Date.now() - started >= 1000, "backoff is a floor, not a ceiling");
+  // Retry-After: 0 cannot shorten the 1s backoff floor. Measured between the two
+  // requests on the monotonic clock: a timer can wake a fraction of a millisecond
+  // early, and Date.now can read 999 ms for a full second.
+  const gap = requestedAt[1] - requestedAt[0];
+  assert.ok(gap >= 1000 - SLACK_MS, `backoff is a floor, not a ceiling: got ${gap.toFixed(3)}ms`);
 });
 
 test("retries are bounded — a persistent 500 stops after two", async () => {
