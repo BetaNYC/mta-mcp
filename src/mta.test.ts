@@ -20,6 +20,7 @@ import {
   isDisrupting,
   isKnownAlertType,
   overlapsEtDay,
+  alertOnEtDay,
   resolveStationMatches,
   resolveStationStrict,
   STATIONS,
@@ -127,6 +128,69 @@ test("any one of several periods overlapping is enough", () => {
 test("a period with no end is open-ended", () => {
   assert.equal(overlapsEtDay([{ start: satStart - 86_400 }], SAT), true);
   assert.equal(overlapsEtDay([{ start: satEnd + 86_400 }], SAT), false);
+});
+
+// ─── Alerts with no end time (alertOnEtDay) ──────────────────────────────────
+//
+// The live check of 2026-11-19: on a Thursday, a "Delays" alert that started at 9:40 AM with no
+// end was counted as a disruption on the Sunday. GTFS-realtime says a missing end means the
+// alert is shown until it leaves the feed, not that the delay lasts until then.
+
+const THU = "2026-11-19";
+const SUN = "2026-11-22";
+const thuMorning = Math.floor(Date.parse("2026-11-19T14:40:00Z") / 1000); // 9:40 AM ET
+const readAt = Date.parse("2026-11-19T15:00:00Z"); // the feed was read at 10:00 AM ET
+
+test("an unplanned alert with no end applies today, with a note", () => {
+  const on = alertOnEtDay([{ start: thuMorning }], THU, { planned: false, asOfMs: readAt });
+  assert.equal(on?.applies_on_date, true);
+  assert.equal(on?.open_ended, true);
+  assert.match(on?.date_note ?? "", /no end time\. It is a live alert, in effect when the feed was read/);
+});
+
+test("an unplanned alert with no end is not stated for a later date, and not dropped", () => {
+  const on = alertOnEtDay([{ start: thuMorning }], SUN, { planned: false, asOfMs: readAt });
+  assert.notEqual(on, null, "dropping it would answer 'no disruption'");
+  assert.equal(on?.applies_on_date, null);
+  assert.equal(on?.open_ended, true);
+  assert.match(on?.date_note ?? "", /current when the feed was read on 2026-11-19, not a forecast for 2026-11-22/);
+  // The same with no active_period at all: shown "as long as it appears in the feed".
+  assert.equal(alertOnEtDay([], SUN, { planned: false, asOfMs: readAt })?.applies_on_date, null);
+  assert.match(alertOnEtDay(undefined, SUN, { planned: false, asOfMs: readAt })?.date_note ?? "", /no active period/);
+});
+
+test("planned work with no end still applies on a later date, with a note", () => {
+  const on = alertOnEtDay([{ start: thuMorning }], SUN, { planned: true, asOfMs: readAt });
+  assert.equal(on?.applies_on_date, true);
+  assert.equal(on?.open_ended, true);
+  assert.match(on?.date_note ?? "", /planned work.*counted on 2026-11-22/);
+  assert.equal(alertOnEtDay([], SUN, { planned: true, asOfMs: readAt })?.applies_on_date, true);
+});
+
+test("a bounded period is stated as it is, planned or not", () => {
+  const sunStart = etDayBounds(SUN).start;
+  const period = [{ start: sunStart + 3600, end: sunStart + 7200 }];
+  for (const planned of [true, false]) {
+    assert.deepEqual(alertOnEtDay(period, SUN, { planned, asOfMs: readAt }), {
+      applies_on_date: true,
+      open_ended: false,
+      date_note: null,
+    });
+    assert.equal(alertOnEtDay(period, THU, { planned, asOfMs: readAt }), null);
+  }
+});
+
+test("a bounded period that reaches the date wins over an open-ended one", () => {
+  const sunStart = etDayBounds(SUN).start;
+  const periods = [{ start: thuMorning }, { start: sunStart, end: sunStart + 3600 }];
+  assert.equal(alertOnEtDay(periods, SUN, { planned: false, asOfMs: readAt })?.applies_on_date, true);
+});
+
+test("'today' is the day the feed was read, in New York", () => {
+  // 11:30 PM ET on Thursday is already Friday in UTC; Friday is still a later date.
+  const lateThu = Date.parse("2026-11-20T04:30:00Z");
+  assert.equal(alertOnEtDay([{ start: thuMorning }], THU, { planned: false, asOfMs: lateThu })?.applies_on_date, true);
+  assert.equal(alertOnEtDay([{ start: thuMorning }], "2026-11-20", { planned: false, asOfMs: lateThu })?.applies_on_date, null);
 });
 
 test("an alert with no active_period is active on every date", () => {

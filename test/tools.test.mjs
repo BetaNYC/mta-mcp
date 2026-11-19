@@ -7,6 +7,7 @@ import {
   ENE_UPCOMING_URL,
   STATIONS_DATA_SOURCE,
   SUBWAY_ALERTS_URL,
+  todayIso,
 } from "../dist/mta.js";
 import { parseStops, routesByParentStation, splitCsvLine } from "../scripts/update-stations.mjs";
 
@@ -851,6 +852,130 @@ test("an alert with no active_period is reported on every date", async () => {
     if (previousTtl === undefined) delete process.env.MTA_MCP_CACHE_TTL_MS;
     else process.env.MTA_MCP_CACHE_TTL_MS = previousTtl;
   }
+});
+
+// ─── Alerts with no end time ─────────────────────────────────────────────────
+//
+// Reproduces the live check of 2026-11-19: a live "Delays" alert with a start and no end was
+// counted as a disruption days later. GTFS-realtime: a TimeRange with no end "ends at plus
+// infinity", and active_period is when the alert "should be shown to the user". So it is shown
+// until MTA removes it; that is not a forecast for a later date.
+
+/** A New York date `days` after today. */
+function daysFromToday(days) {
+  const [y, m, d] = todayIso().split("-").map(Number);
+  return new Date(Date.UTC(y, m - 1, d + days)).toISOString().slice(0, 10);
+}
+
+/** The fixture's live C/E "Delays" alert, made open-ended from an hour ago; or planned work. */
+async function withOpenEndedAlert(entityId, fn) {
+  const mutated = structuredClone(ALERTS);
+  const target = mutated.entity.find((e) => e.id === entityId);
+  target.alert.active_period = [{ start: Math.floor(Date.now() / 1000) - 3600 }];
+  const previousTtl = process.env.MTA_MCP_CACHE_TTL_MS;
+  process.env.MTA_MCP_CACHE_TTL_MS = "0";
+  alertsBody = mutated;
+  try {
+    await fn();
+  } finally {
+    alertsBody = ALERTS;
+    await callTool("get_service_alerts", { date: SAT }); // refill the cache
+    if (previousTtl === undefined) delete process.env.MTA_MCP_CACHE_TTL_MS;
+    else process.env.MTA_MCP_CACHE_TTL_MS = previousTtl;
+  }
+}
+
+const LIVE_DELAY = "lmm:alert:267678:26";
+
+test("an open-ended live delay counts today", async () => {
+  await withOpenEndedAlert(LIVE_DELAY, async () => {
+    const today = await call("check_route_on_date", { route_id: "C", date: todayIso() });
+    assert.equal(today.alert_count, 1);
+    assert.equal(today.disrupted, true);
+    assert.equal(today.disrupted_note, null);
+    const a = today.alerts[0];
+    assert.equal(a.entity_id, LIVE_DELAY);
+    assert.equal(a.betanyc.applies_on_date, true);
+    assert.equal(a.betanyc.open_ended, true);
+    assert.match(a.betanyc.date_note, /live alert, in effect when the feed was read/);
+    // MTA's own fields are untouched: the period still has no end.
+    assert.equal(a.active_periods.length, 1);
+    assert.equal("end" in a.active_periods[0], false);
+  });
+});
+
+test("an open-ended live delay is not stated as a disruption days later, nor dropped", async () => {
+  await withOpenEndedAlert(LIVE_DELAY, async () => {
+    const later = daysFromToday(3);
+    const r = await call("check_route_on_date", { route_id: "C", date: later });
+    assert.equal(r.alert_count, 1, "the alert is still listed");
+    assert.equal(r.alerts[0].betanyc.applies_on_date, null);
+    assert.equal(r.alerts[0].betanyc.counts_as_disruption, true, "its effect is still a delay");
+    assert.match(r.alerts[0].betanyc.date_note, new RegExp(`not a forecast for ${later}`));
+    assert.equal(r.disrupted, null, "neither yes nor no");
+    assert.match(r.disrupted_note, new RegExp(`disrupted is null: .*${LIVE_DELAY}.*not a forecast for ${later}`));
+
+    const listed = await call("get_service_alerts", { route_id: "C", date: later });
+    assert.equal(listed.alert_count, 1);
+    assert.equal(listed.disrupting_alert_count, 0);
+    assert.equal(listed.unknown_on_date_count, 1);
+  });
+});
+
+test("open-ended planned work still counts on a later date", async () => {
+  await withOpenEndedAlert("lmm:planned_work:33826", async () => {
+    const later = daysFromToday(3);
+    const r = await call("check_route_on_date", { route_id: "6", date: later });
+    assert.equal(r.alert_count, 1);
+    assert.equal(r.disrupted, true);
+    assert.equal(r.disrupted_note, null);
+    assert.equal(r.alerts[0].betanyc.applies_on_date, true);
+    assert.equal(r.alerts[0].betanyc.open_ended, true);
+    assert.match(r.alerts[0].betanyc.date_note, /planned work/);
+    const listed = await call("get_service_alerts", { route_id: "6", date: later });
+    assert.equal(listed.disrupting_alert_count, 1);
+    assert.equal(listed.unknown_on_date_count, 0);
+  });
+});
+
+test("a live delay with no end beside a known disruption: disrupted stays true, the note says what was left out", async () => {
+  const mutated = structuredClone(ALERTS);
+  const delay = mutated.entity.find((e) => e.id === LIVE_DELAY);
+  delay.alert.active_period = [{ start: Math.floor(Date.now() / 1000) - 3600 }];
+  delay.alert.informed_entity.push({ agency_id: "MTASBWY", route_id: "6" });
+  const previousTtl = process.env.MTA_MCP_CACHE_TTL_MS;
+  process.env.MTA_MCP_CACHE_TTL_MS = "0";
+  alertsBody = mutated;
+  try {
+    const later = daysFromToday(3);
+    const withPlanned = structuredClone(mutated);
+    withPlanned.entity.find((e) => e.id === "lmm:planned_work:33826").alert.active_period = [
+      { start: Math.floor(Date.now() / 1000) - 3600 },
+    ];
+    alertsBody = withPlanned;
+    const both = await call("check_route_on_date", { route_id: "6", date: later });
+    assert.equal(both.alert_count, 2);
+    assert.equal(both.disrupted, true);
+    assert.match(both.disrupted_note, new RegExp(`^Not counted in disrupted: a live alert with no end time \\(${LIVE_DELAY}\\)`));
+  } finally {
+    alertsBody = ALERTS;
+    await callTool("get_service_alerts", { date: SAT });
+    if (previousTtl === undefined) delete process.env.MTA_MCP_CACHE_TTL_MS;
+    else process.env.MTA_MCP_CACHE_TTL_MS = previousTtl;
+  }
+});
+
+test("a normal bounded alert is stated as before", async () => {
+  const r = await call("check_route_on_date", { route_id: "6", date: SAT });
+  assert.equal(r.disrupted, true);
+  assert.equal(r.disrupted_note, null);
+  assert.deepEqual(
+    [r.alerts[0].betanyc.applies_on_date, r.alerts[0].betanyc.open_ended, r.alerts[0].betanyc.date_note],
+    [true, false, null]
+  );
+  const listed = await call("get_service_alerts", { date: SAT });
+  assert.equal(listed.unknown_on_date_count, 0);
+  assert.ok(listed.alerts.every((a) => a.betanyc.applies_on_date === true && a.betanyc.open_ended === false));
 });
 
 // ─── Output size ─────────────────────────────────────────────────────────────

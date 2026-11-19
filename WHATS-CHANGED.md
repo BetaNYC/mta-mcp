@@ -7,6 +7,15 @@ This page lists the changes to mta-mcp that a reader would notice: new tools, ne
 
 mta-mcp is not published to npm. You run it from your own copy of the repository, so a change reaches you when you update that copy and rebuild it. To report a bug in this server or ask for a new feature, [open an issue on GitHub](https://github.com/BetaNYC/mta-mcp/issues).
 
+## Unreleased: A live delay is no longer counted on a later date
+
+- **Tags:** MCP, Correction
+- **What changed:** When MTA posts a live alert, such as a delay, it often gives a start time and no end time. That means "show this until we take it down", not "this will last". The route check used to count such an alert as a disruption on any later date you asked about, so on a Thursday it said a delay from that morning would also hit the train on Sunday. Now a live alert with no end time counts only for today. Asked about a later day, it is still listed, with a note that it is current now and not a forecast, and the answer says it cannot tell yes or no from that alert alone. Planned work with no end time still counts on later dates, because MTA scheduled it.
+- **If you used the old numbers:** If you asked about a future date and were told a route was disrupted because of a live delay or other live alert with no end time, ask again. Answers about today, and about planned work, are unchanged.
+- **Who it affects:** Anyone planning a trip or an event for a later date who asked whether a route was disrupted.
+- **MCP version:** [mta-mcp 0.5.0](CHANGELOG.md)
+- **More detail:** [How an alert's date is read](docs/tools.md#the-alert-fields)
+
 ## 2026-11-19: Lists come in pages, and elevator answers name the right source
 
 - **Tags:** MCP, Correction

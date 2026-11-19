@@ -529,8 +529,11 @@ export function etDayBounds(dateIso: string): { start: number; end: number } {
  * Bounds are half-open, so an alert that ends exactly at a day's opening
  * midnight does NOT affect that day, while one that ends exactly at the
  * following midnight does. Weekend work arrives as several periods (one per
- * weekend), so any single overlap is enough. A period with no `end` is
- * open-ended; none were observed, but the feed's schema permits it.
+ * weekend), so any single overlap is enough. A period with no `end` runs on
+ * without limit: the GTFS-realtime TimeRange says "If missing, the interval
+ * ends at plus infinity." MTA's feed does send these: a live "Delays" alert
+ * had a start and no end on 2026-11-19. Whether such an alert can be stated
+ * for a later date is decided in alertOnEtDay, not here.
  *
  * An alert with no active_period at all is active on every date. The
  * GTFS-realtime reference (https://gtfs.org/documentation/realtime/reference/#message-alert)
@@ -548,6 +551,84 @@ export function overlapsEtDay(periods: ActivePeriod[] | undefined, dateIso: stri
     const end = p.end ?? Number.POSITIVE_INFINITY;
     return start < dayEnd && end > dayStart;
   });
+}
+
+/**
+ * BetaNYC's reading of whether an alert applies on an Eastern day. `null` from alertOnEtDay
+ * means it does not reach that day at all.
+ *
+ * - `applies_on_date`: `true`, or `null` when it cannot be said (see below). Never `false`:
+ *   an alert that does not reach the day is left out instead.
+ * - `open_ended`: MTA gave no end time for the period that reaches the day, or no period at all.
+ * - `date_note`: a plain sentence for the caller when `open_ended` is true, else `null`.
+ */
+export type AlertOnDate = {
+  applies_on_date: true | null;
+  open_ended: boolean;
+  date_note: string | null;
+};
+
+/**
+ * Does this alert apply on the Eastern day, and can that be stated?
+ *
+ * The one rule for every tool that answers about a date. GTFS-realtime
+ * (https://gtfs.org/documentation/realtime/reference/#message-timerange and
+ * #message-alert) says a TimeRange with no `end` "ends at plus infinity", that
+ * active_period is the "Time when the alert should be shown to the user", and
+ * that an alert with no active_period "will be shown as long as it appears in
+ * the feed". So a missing end says when to show the alert, not when the
+ * problem will be over: it is shown until MTA takes it out of the feed. MTA's
+ * own notes (github.com/nymta/gtfs-documentation) say nothing more about it.
+ *
+ * - A period with an end that overlaps the day: MTA has said it applies. Stated.
+ * - Planned work with no end (or no period): MTA scheduled it and has not
+ *   ended it, so it is taken to apply, as the spec reads. Stated, with a note.
+ * - A live, unplanned alert with no end (or no period), asked about today or
+ *   earlier: it is in the feed now. Stated, with a note.
+ * - The same alert asked about a later day: it is current as of the feed's
+ *   read, not a forecast for that day. MTA has not said it will still be in
+ *   the feed then, nor that it will not, so `applies_on_date` is `null`.
+ *   Dropping it would answer "no disruption" as wrongly as counting it would
+ *   answer "disruption".
+ *
+ * `asOfMs` is when the feed was read; "today" is that day in New York.
+ */
+export function alertOnEtDay(
+  periods: ActivePeriod[] | undefined,
+  dateIso: string,
+  opts: { planned: boolean; asOfMs: number }
+): AlertOnDate | null {
+  if (!overlapsEtDay(periods, dateIso)) return null;
+  const { start: dayStart, end: dayEnd } = etDayBounds(dateIso);
+  const noPeriods = !periods || periods.length === 0;
+  const bounded =
+    !noPeriods &&
+    periods.some(
+      (p) => p.end != null && (p.start ?? Number.NEGATIVE_INFINITY) < dayEnd && p.end > dayStart
+    );
+  if (bounded) return { applies_on_date: true, open_ended: false, date_note: null };
+
+  const what = noPeriods ? "gives this alert no active period" : "gives this alert no end time";
+  const asOfDay = todayIso(new Date(opts.asOfMs));
+  if (opts.planned) {
+    return {
+      applies_on_date: true,
+      open_ended: true,
+      date_note: `MTA ${what}. It is planned work, and under GTFS-realtime it stays in effect until MTA removes it from the feed, so it is counted on ${dateIso}. MTA's human_readable_active_period says when MTA expects it to end, if it says.`,
+    };
+  }
+  if (dateIso <= asOfDay) {
+    return {
+      applies_on_date: true,
+      open_ended: true,
+      date_note: `MTA ${what}. It is a live alert, in effect when the feed was read, until MTA removes it from the feed.`,
+    };
+  }
+  return {
+    applies_on_date: null,
+    open_ended: true,
+    date_note: `MTA ${what}. It is a live alert, current when the feed was read on ${asOfDay}, not a forecast for ${dateIso}: MTA has not said whether it will still apply then. It is not counted as a disruption on ${dateIso}, nor ruled out. Ask again on the day.`,
+  };
 }
 
 // ─── Station list ────────────────────────────────────────────────────────────
