@@ -9,6 +9,33 @@ This package is not published to npm. Version numbers track the local build. See
 
 ## [Unreleased]
 
+## [0.5.0] — 2026-11-19
+
+A live alert with no end time is current now, not a forecast for a later date.
+
+### Fixed
+
+- **A live alert with no end time was counted as a disruption on any later date.** Asked on
+  2026-11-19 about 2026-11-22, `check_route_on_date` counted that morning's live "Delays" alert,
+  which had a start and no end, as a disruption on the Sunday. GTFS-realtime says a period with
+  no end "ends at plus infinity" and that `active_period` is when the alert "should be shown":
+  it is shown until MTA removes it, which says nothing about a later day. One rule,
+  `alertOnEtDay` in `src/mta.ts`, now decides for both alert tools. A period with an end that
+  reaches the date applies. Planned work with no end applies. A live alert with no end applies
+  today; asked about a later date it is still listed, with `applies_on_date: null`, and is
+  neither counted nor ruled out. The code comment that said no such period had been seen is
+  corrected. MTA's own fields are unchanged.
+
+### Changed
+
+- Each alert's `betanyc` object gains `applies_on_date` (`true`, or `null` when it can't be
+  said), `open_ended` and `date_note`.
+- `check_route_on_date`: `disrupted` is `null` when the only disrupting alerts are live ones
+  with no end time and the date is later than today. New `disrupted_note` says which alerts
+  were not counted and why.
+- `get_service_alerts`: `disrupting_alert_count` counts only alerts that apply on the date.
+  New `unknown_on_date_count` counts the ones that may or may not.
+
 ## [0.4.0] — 2026-11-19
 
 BetaNYC's MCP practices (epic #19).

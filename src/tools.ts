@@ -36,7 +36,8 @@ import {
   filterEneRows,
   isDisrupting,
   isKnownAlertType,
-  overlapsEtDay,
+  alertOnEtDay,
+  type AlertOnDate,
   resolveStationMatches,
   resolveStationStrict,
   assertRouteFilterAvailable,
@@ -153,7 +154,7 @@ const EFFECTS = [
  */
 export const INSTRUCTIONS: string = [
   "NYC subway service alerts, elevator and escalator outages, and station lookup, from MTA's public feeds, by BetaNYC. Unofficial: BetaNYC is not the MTA, and riders should confirm service at https://www.mta.info before they travel.",
-  "In every answer, MTA's own fields are as MTA published them. What BetaNYC works out from them is kept apart in a `betanyc` object: for an alert, its effect, whether it counts as a disruption, whether it is planned work and whether its alert type is recognized; for an outage, how it was placed at a station and MTA's inventory details. Answers such as `disrupted` are BetaNYC's, not MTA's.",
+  "In every answer, MTA's own fields are as MTA published them. What BetaNYC works out from them is kept apart in a `betanyc` object: for an alert, its effect, whether it counts as a disruption, whether it is planned work, whether its alert type is recognized, and whether it applies on the date asked about (a live alert with no end time is current now, not a forecast for a later date); for an outage, how it was placed at a station and MTA's inventory details. Answers such as `disrupted` are BetaNYC's, not MTA's.",
   "Station names, routes, ADA status and the elevator inventory come from dated copies bundled with this server, which the user must refresh; `snapshot_as_of` gives their dates and `snapshot_warning` flags old ones. Service alerts and outages are read live from MTA, cached up to a minute, and may not be real time.",
   "Long lists come in pages: `paging.showing` says how many there are, and `offset: paging.next_offset` gets the next page. Counts cover every match.",
   betanyc.instructions,
@@ -167,7 +168,7 @@ export const TOOLS = annotateTools([
     name: "check_route_on_date",
     title: "Is a subway route disrupted on a date?",
     description:
-      "Is a subway route disrupted on a given date, optionally at one station? Dates are interpreted in America/New_York. Answers from MTA's service-alert feed. A station that only GAINS service (an express train running local) is reported as affected but NOT disrupted. Station-level absence is not absence of impact — read station_level_detail before treating disrupted:false as a guarantee. The station carries MTA's ADA status; elevator outages are included only with include_accessibility:true. Each alert's `betanyc` object also says whether it bears on the station, and disrupted is BetaNYC's answer from those readings, not MTA's.",
+      "Is a subway route disrupted on a given date, optionally at one station? Dates are interpreted in America/New_York. Answers from MTA's service-alert feed. A station that only GAINS service (an express train running local) is reported as affected but NOT disrupted. Station-level absence is not absence of impact — read station_level_detail before treating disrupted:false as a guarantee. The station carries MTA's ADA status; elevator outages are included only with include_accessibility:true. Each alert's `betanyc` object also says whether it bears on the station, and disrupted is BetaNYC's answer from those readings, not MTA's. disrupted is null when the only disruption found is a live alert with no end time and the date is after today: it is current now, not a forecast; read disrupted_note.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -469,7 +470,7 @@ const isPlannedWork = (entityId: string | undefined): boolean =>
  * a reader can tell the two apart: MTA's terms (term 5) say "You will not modify or delete any
  * of the data", and these readings are BetaNYC's, not MTA's. See docs/terms-compliance.md.
  */
-function shapeAlert(entity: AlertEntity, routeIds: string[] | null) {
+function shapeAlert(entity: AlertEntity, routeIds: string[] | null, onDate: AlertOnDate) {
   const alert = entity.alert ?? {};
   const mercury = alert["transit_realtime.mercury_alert"];
   const alertType = mercury?.alert_type;
@@ -497,8 +498,39 @@ function shapeAlert(entity: AlertEntity, routeIds: string[] | null) {
       counts_as_disruption: isDisrupting(effect),
       planned: isPlannedWork(entity.id),
       alert_type_recognized: isKnownAlertType(alertType),
+      // Whether it applies on the date asked about, and a note when MTA gave no end time.
+      ...onDate,
     },
   };
+}
+
+/** BetaNYC's reading of one alert against the date, the same way for every tool. */
+function alertOnDate(entity: AlertEntity, date: string, fetchedAt: number): AlertOnDate | null {
+  return alertOnEtDay(entity.alert?.active_period, date, {
+    planned: isPlannedWork(entity.id),
+    asOfMs: fetchedAt,
+  });
+}
+
+/**
+ * What to say about alerts that may or may not apply on the date: live, with no end time, and
+ * the date after the day the feed was read. `null` when there are none.
+ */
+function unknownOnDateNote(
+  alerts: { entity_id: string | null; betanyc: { applies_on_date: true | null } }[],
+  date: string,
+  disrupted: boolean | null
+): string | null {
+  const unknown = alerts.filter((a) => a.betanyc.applies_on_date === null);
+  if (unknown.length === 0) return null;
+  const which = `${unknown.length === 1 ? "a live alert" : `${unknown.length} live alerts`} with no end time (${unknown
+    .map((a) => a.entity_id)
+    .join(", ")})`;
+  const lead =
+    disrupted === null
+      ? `disrupted is null: the only disruption found is ${which}, current when the feed was read, not a forecast for ${date}. MTA has not said whether ${unknown.length === 1 ? "it" : "they"} will still apply then, so the answer is neither yes nor no.`
+      : `Not counted in disrupted: ${which}, current when the feed was read, not a forecast for ${date}.`;
+  return `${lead} Ask again on the day.`;
 }
 
 // ─── Tool implementations ────────────────────────────────────────────────────
@@ -561,19 +593,19 @@ async function checkRouteOnDate(args: {
 
   const { entities, fetchedAt, feedTimestamp } = await loadAlerts();
 
-  const matching = entities.filter(
-    (e) =>
-      entitiesForRoute(e.alert ?? {}, args.route_id).length > 0 &&
-      overlapsEtDay(e.alert?.active_period, date)
-  );
+  const matching = entities.flatMap((entity) => {
+    if (entitiesForRoute(entity.alert ?? {}, args.route_id).length === 0) return [];
+    const onDate = alertOnDate(entity, date, fetchedAt);
+    return onDate ? [{ entity, onDate }] : [];
+  });
 
-  const shaped = matching.map((entity) => {
+  const shaped = matching.map(({ entity, onDate }) => {
     const alertType = entity.alert?.["transit_realtime.mercury_alert"]?.alert_type;
     const routeEntities = entitiesForRoute(entity.alert ?? {}, args.route_id);
     const taggedStops = routeEntities.filter((e) => e.stop_id).map((e) => e.stop_id);
     const hasStationDetail = taggedStops.length > 0;
     const tagsThisStation = station ? taggedStops.includes(station.stop_id) : false;
-    const base = shapeAlert(entity, [args.route_id]);
+    const base = shapeAlert(entity, [args.route_id], onDate);
     return {
       ...base,
       betanyc: {
@@ -594,7 +626,14 @@ async function checkRouteOnDate(args: {
   });
 
   const considered = station ? shaped.filter((a) => a.betanyc.relevant_to_station) : shaped;
-  const disrupted = considered.some((a) => a.betanyc.counts_as_disruption);
+  // true when a disrupting alert is known to apply on the date. null when the only disrupting
+  // alerts are live ones with no end time and the date is later: neither yes nor no.
+  const disrupting = considered.filter((a) => a.betanyc.counts_as_disruption);
+  const disrupted: boolean | null = disrupting.some((a) => a.betanyc.applies_on_date === true)
+    ? true
+    : disrupting.length > 0
+      ? null
+      : false;
   const stationLevelDetail = shaped.length > 0 && shaped.every((a) => a.betanyc.station_level_detail);
 
   const unknownAlertTypes = [
@@ -616,6 +655,7 @@ async function checkRouteOnDate(args: {
     route_id: args.route_id,
     date,
     disrupted,
+    disrupted_note: unknownOnDateNote(considered, date, disrupted),
     station: station
       ? {
           stop_id: station.stop_id,
@@ -729,20 +769,17 @@ async function getServiceAlerts(args: {
   const date = args.date ? assertIsoDate(args.date) : todayIso();
   const { entities, fetchedAt, feedTimestamp } = await loadAlerts();
 
-  const matching = entities.filter((entity) => {
+  const shaped = entities.flatMap((entity) => {
     const alert = entity.alert ?? {};
-    if (!overlapsEtDay(alert.active_period, date)) return false;
-    if (args.route_id && entitiesForRoute(alert, args.route_id).length === 0) return false;
+    const onDate = alertOnDate(entity, date, fetchedAt);
+    if (!onDate) return [];
+    if (args.route_id && entitiesForRoute(alert, args.route_id).length === 0) return [];
     const alertType = alert["transit_realtime.mercury_alert"]?.alert_type;
-    if (args.alert_type && alertType !== args.alert_type) return false;
-    if (args.planned_only && !isPlannedWork(entity.id)) return false;
-    if (args.effect && effectFor(alertType) !== args.effect) return false;
-    return true;
+    if (args.alert_type && alertType !== args.alert_type) return [];
+    if (args.planned_only && !isPlannedWork(entity.id)) return [];
+    if (args.effect && effectFor(alertType) !== args.effect) return [];
+    return [shapeAlert(entity, args.route_id ? [args.route_id] : null, onDate)];
   });
-
-  const shaped = matching.map((entity) =>
-    shapeAlert(entity, args.route_id ? [args.route_id] : null)
-  );
 
   return {
     date,
@@ -753,7 +790,12 @@ async function getServiceAlerts(args: {
       effect: args.effect ?? null,
     },
     alert_count: shaped.length,
-    disrupting_alert_count: shaped.filter((a) => a.betanyc.counts_as_disruption).length,
+    // Only alerts known to apply on the date. Live alerts with no end time, asked about a later
+    // date, are counted apart: they may or may not apply then.
+    disrupting_alert_count: shaped.filter(
+      (a) => a.betanyc.counts_as_disruption && a.betanyc.applies_on_date === true
+    ).length,
+    unknown_on_date_count: shaped.filter((a) => a.betanyc.applies_on_date === null).length,
     unknown_alert_types: [
       ...new Set(shaped.filter((a) => !a.betanyc.alert_type_recognized).map((a) => a.alert_type)),
     ],

@@ -1,6 +1,6 @@
 # mta-mcp
 
-> ⚠️ **Alpha, v0.4.0.** This is early code. We are sharing it now to find out
+> ⚠️ **Alpha, v0.5.0.** This is early code. We are sharing it now to find out
 > what breaks. Tool names, parameters, and response shapes may change without
 > notice, so please don't build anything important on it yet.
 >
@@ -117,7 +117,10 @@ Returns `disrupted`, the matching `alerts`, and a provenance block. Each alert
 carries MTA's own fields (its status, text, the stops MTA named, and MTA's
 rider-facing date string) and, in a separate `betanyc` object, BetaNYC's
 reading of it: the classified `effect` and whether it counts as a disruption.
-`disrupted` is BetaNYC's answer from those, not MTA's. The station carries MTA's ADA status. Elevator
+`disrupted` is BetaNYC's answer from those, not MTA's. A live alert with no
+end time is current now, not a forecast: asked about a later date, it is listed
+but not counted, and if it is the only disruption, `disrupted` is `null` and
+`disrupted_note` says why. The station carries MTA's ADA status. Elevator
 outages are included only when you ask, to keep the default answer small.
 
 ```json

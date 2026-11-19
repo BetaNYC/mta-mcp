@@ -137,13 +137,34 @@ In `betanyc`:
 | `counts_as_disruption` | Whether this alert makes the route "disrupted" |
 | `planned` | `true` if the id starts `lmm:planned_work:`. That's an observed pattern, not something MTA documents |
 | `alert_type_recognized` | `false` if this server doesn't know that status yet |
+| `applies_on_date` | `true` if the alert applies on the date you asked about. `null` if that can't be said: a live alert with no end time, asked about a later date. See below |
+| `open_ended` | `true` if MTA gave no end time for the period that reaches your date, or no period at all |
+| `date_note` | With `open_ended: true`, a plain sentence saying how the date was read. Otherwise `null` |
 
-An alert is active on a date if any of its periods overlaps that day in New
-York time. An alert with no periods at all is active on every date. The
-[GTFS-realtime reference](https://gtfs.org/documentation/realtime/reference/#message-alert)
-says such an alert is shown "as long as it appears in the feed," and the feed
-only holds alerts that are live now. It hasn't come up yet: all 159 alerts in
-the 2026-09-22 pull had periods.
+An alert is listed for a date if any of its periods overlaps that day in New
+York time. A period with no end runs on, and an alert with no periods at all
+reaches every date. The
+[GTFS-realtime reference](https://gtfs.org/documentation/realtime/reference/#message-timerange)
+says a period with no end "ends at plus infinity", that `active_period` is the
+"Time when the alert should be shown to the user", and that an alert with no
+period "will be shown as long as it appears in the feed". So no end time means
+"show it until MTA takes it out of the feed". It does not say the problem will
+last. MTA's [own notes](https://github.com/nymta/gtfs-documentation) say
+nothing more. MTA does send these: a live "Delays" alert had a start and no
+end on 2026-11-19.
+
+So BetaNYC reads an alert with no end time this way:
+
+| The alert | Asked about | `applies_on_date` |
+|---|---|---|
+| Any alert whose period with an end reaches the date | any date | `true` |
+| Planned work (`planned: true`) with no end | any date it reaches | `true`, with a note |
+| A live alert with no end | today or earlier | `true`, with a note |
+| A live alert with no end | a later date | `null`: current when the feed was read, not a forecast for that date |
+
+"Today" is the day in New York when the feed was read. An alert with
+`applies_on_date: null` is still listed, so you can see it. It isn't counted
+as a disruption on that date, and it isn't ruled out either.
 
 `affected_stops` deliberately ignores MTA's `affected_stations` field, which
 lists the whole route. See [CONTEXT.md](../CONTEXT.md#the-traps-in-vocabulary-terms).
@@ -200,7 +221,8 @@ Is a route disrupted on a date, optionally at one station?
 | Field | Meaning |
 |---|---|
 | `route_id`, `date` | What you asked |
-| `disrupted` | `true` if any relevant alert counts as a disruption |
+| `disrupted` | `true` if any relevant alert counts as a disruption and applies on the date. `null` if the only such alerts are live ones with no end time and the date is later than today: neither yes nor no. Otherwise `false` |
+| `disrupted_note` | When a relevant alert has `applies_on_date: null`, a sentence naming it and saying it was not counted. Otherwise `null` |
 | `station` | `{stop_id, stop_name, routes, accessibility}` for the station used, or `null`. `accessibility` is MTA's ADA status; see [docs/accessibility.md](accessibility.md#station-accessibility) |
 | `station_matched_by` | `"stop_id"`, `"station name, narrowed to route …"`, or `null` |
 | `station_serves_route` | Whether that station is on this route in MTA's schedule data. `null` with no station |
@@ -221,7 +243,7 @@ Extra fields in each alert's `betanyc` object:
 | `station_level_detail` | Whether this alert names any stations on this route |
 
 **How `disrupted` is decided.** With no station, any disrupting alert on the
-route makes it `true`. With a station, only alerts with
+route that applies on the date makes it `true`. With a station, only alerts with
 `relevant_to_station: true` count. So an alert that names other stations and
 not yours is left out, but an alert that names no stations is counted, because
 it could affect anywhere on the route.
@@ -276,7 +298,8 @@ when you can.
 | `date` | The date used |
 | `filters` | The filters applied |
 | `alert_count` | Alerts that match, on every page |
-| `disrupting_alert_count` | How many of those count as disruptions |
+| `disrupting_alert_count` | How many of those count as disruptions and apply on the date |
+| `unknown_on_date_count` | How many have `applies_on_date: null`: live alerts with no end time, asked about a later date. They may or may not apply then |
 | `paging` | This page: `total`, `returned`, `offset`, `limit`, `next_offset`, `showing` |
 | `unknown_alert_types` | Statuses this server didn't recognize |
 | `known_alert_types` | Every status in the effect table, so you can see what `alert_type` accepts |
