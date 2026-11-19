@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { z } from "zod";
 import {
   type Alert,
@@ -48,7 +49,14 @@ import {
   VERSION,
 } from "./mta.js";
 import { type SnapshotName, SNAPSHOTS, snapshotFooter, stationListHint } from "./freshness.js";
-import { type ToolResult, annotateTools, createBetanycTools, toolError } from "./betanyc-tools.js";
+import {
+  type ToolResult,
+  annotateTools,
+  createBetanycTools,
+  errorSummary,
+  provenance as sourceLine,
+  toolError,
+} from "./betanyc-tools.js";
 
 /**
  * whats_changed, about_betanyc and about_data, the three tools BetaNYC is adding to each of its
@@ -350,6 +358,69 @@ export function parseToolArgs<K extends keyof typeof ARG_SHAPES>(
 
 // ─── Shared shaping ──────────────────────────────────────────────────────────
 
+// ─── What BetaNYC did to the data, in every answer ──────────────────────────
+//
+// BetaNYC's rule: when BetaNYC changes a publisher's data in any way, the answer says so, and
+// says it the way about_data does. about_data answers "BetaNYC modified this data" for all five
+// sources (DATA-SOURCES.json), so every MTA tool answer carries, in `data_provenance`, one
+// shared-module provenance line per source it used: "BetaNYC modified this data: <what>. This
+// copy should not be considered the official record. ... Official record: <MTA's feed or file>".
+// The names, publisher and links come from DATA-SOURCES.json itself, so the two cannot drift.
+
+type SourceId = "service-alerts" | "elevator-outages" | "stations" | "station-accessibility" | "elevator-inventory";
+
+const DATA_SOURCES_FILE = JSON.parse(readFileSync(new URL("../DATA-SOURCES.json", import.meta.url), "utf8")) as {
+  sources: { id: string; source_name: string; publisher: { name: string }; source_url: string }[];
+};
+
+/** What BetaNYC did to each source, as one short clause. Agrees with DATA-SOURCES.json `changes`. */
+export const BETANYC_CHANGES: Record<SourceId, string> = {
+  "service-alerts":
+    "it kept only the alerts for this question; for header_text, description_text and human_readable_active_period it keeps one translation as plain text under MTA's field names (MTA's English one, or MTA's first one when there is no English) and drops the others; it added stop names from the station list and, in a separate betanyc object on each alert, its own reading of the alert (any disrupted answer or disruption count is BetaNYC's); MTA's other values are as MTA gave them",
+  "elevator-outages":
+    "it kept only the outages for this question and, when a station or name is given, lists them in its own order (best station match first); each row's fields are MTA's as published, and what BetaNYC adds (the station it placed the row at, how, and MTA's inventory details) is in a separate betanyc object",
+  stations:
+    "it built this station list from MTA's GTFS file (parent stations only) and worked out each station's routes from MTA's trips and stop times; where an answer lists station matches, their order and each score are BetaNYC's own ranking, not MTA's",
+  "station-accessibility":
+    "it kept only the ADA fields, direction labels and station ids, renamed three fields, and turned numbers stored as text into numbers; the ADA values are MTA's",
+  "elevator-inventory":
+    "it kept only the fields this server uses, turned numbers stored as text into numbers, and added the GTFS stations each piece of equipment is at",
+};
+
+const SNAPSHOT_SOURCE: Record<SnapshotName, SourceId> = {
+  stations: "stations",
+  station_ada: "station-accessibility",
+  equipment: "elevator-inventory",
+};
+
+type LiveUse = { id: "service-alerts" | "elevator-outages"; fetchedAt: number; feedTimestamp?: number };
+
+/** One provenance line per source an answer used, each saying BetaNYC modified it. */
+function dataProvenance(live: LiveUse[], snapshots: SnapshotName[]) {
+  const one = (id: SourceId, kind: "live" | "snapshot", asOf: string | null | undefined, now: Date) => {
+    const src = DATA_SOURCES_FILE.sources.find((x) => x.id === id);
+    if (!src) throw new Error(`DATA-SOURCES.json has no source '${id}'`);
+    const p = sourceLine(
+      {
+        sourceName: src.source_name,
+        publisher: src.publisher.name,
+        sourceUrl: src.source_url,
+        kind,
+        asOf: asOf ?? null,
+        changedByBetanyc: { kind: "modified-by-betanyc", detail: BETANYC_CHANGES[id] },
+      },
+      now
+    );
+    return { id, text: p.text, ...p.provenance };
+  };
+  return [
+    ...live.map((l) =>
+      one(l.id, "live", l.feedTimestamp ? new Date(l.feedTimestamp * 1000).toISOString() : null, new Date(l.fetchedAt))
+    ),
+    ...[...new Set(snapshots)].map((n) => one(SNAPSHOT_SOURCE[n], "snapshot", SNAPSHOTS[n].asOf(), new Date())),
+  ];
+}
+
 /**
  * Provenance attached to every payload.
  *
@@ -476,16 +547,11 @@ async function checkRouteOnDate(args: {
         resolved: false,
         reason: ambiguityReason(args.station, args.route_id, resolved.reason),
         candidate_count: total,
-        candidates_showing:
-          `Showing ${shown.length} of ${total} candidate stations.` +
-          (shown.length < total
-            ? ` For the rest, call resolve_station with query '${args.station}'${
-                resolved.reason === "ambiguous" ? ` and route_id '${args.route_id}'` : ""
-              }, which lists every match in pages.`
-            : ""),
+        candidates_showing: candidatesShowing(shown.length, total, args.station, args.route_id, resolved.reason),
         candidates: withAccessibility(shown),
         ...snapshotFooter(["stations", "station_ada"]),
         data_source: STATIONS_DATA_SOURCE,
+        data_provenance: dataProvenance([], ["stations", "station_ada"]),
         disclaimer: DISCLAIMER,
       };
     }
@@ -540,6 +606,12 @@ async function checkRouteOnDate(args: {
   const accessibilityOutages =
     args.include_accessibility && station ? await accessibilityOnDate(station, date) : null;
 
+  const snapshotsUsed: SnapshotName[] = [
+    "stations",
+    ...(station ? (["station_ada"] as SnapshotName[]) : []),
+    ...(accessibilityOutages ? (["equipment"] as SnapshotName[]) : []),
+  ];
+
   return {
     route_id: args.route_id,
     date,
@@ -567,19 +639,50 @@ async function checkRouteOnDate(args: {
         }`
       : null,
     accessibility_outages: accessibilityOutages,
-    ...snapshotFooter(
-      [
-        "stations",
-        ...(station ? (["station_ada"] as SnapshotName[]) : []),
-        ...(accessibilityOutages ? (["equipment"] as SnapshotName[]) : []),
-      ]
-    ),
+    ...snapshotFooter(snapshotsUsed),
     ...provenance(
       fetchedAt,
       feedTimestamp,
       accessibilityOutages ? `${DATA_SOURCE}; ${ENE_DATA_SOURCE}` : DATA_SOURCE
     ),
+    data_provenance: dataProvenance(
+      [
+        { id: "service-alerts", fetchedAt, feedTimestamp },
+        ...(accessibilityOutages
+          ? [{ id: "elevator-outages" as const, fetchedAt: Date.parse(accessibilityOutages.fetched_at) }]
+          : []),
+      ],
+      snapshotsUsed
+    ),
   };
+}
+
+/**
+ * "Showing N of M" for the unresolved-station answer, saying which M it counts. For a tie, M is
+ * the stations tied for the best match on the route; resolve_station lists those first and then
+ * weaker matches, so its match_count can be larger. That is said here, so the two numbers are
+ * not read as a contradiction.
+ */
+function candidatesShowing(
+  shown: number,
+  total: number,
+  query: string,
+  routeId: string,
+  reason: "no-match" | "not-on-route" | "ambiguous"
+): string {
+  if (reason === "no-match") return "No station matches, so there are no candidates.";
+  if (reason === "not-on-route") {
+    return (
+      `Showing ${shown} of ${total} stations whose name matches '${query}', none of them on route ${routeId}.` +
+      (shown < total ? ` resolve_station with query '${query}' lists all ${total}, in pages.` : "")
+    );
+  }
+  return (
+    `Showing ${shown} of ${total} stations on route ${routeId} tied for the best match to '${query}'.` +
+    (shown < total
+      ? ` resolve_station with query '${query}' and route_id '${routeId}' lists these ${total} first, in pages, then weaker matches, so its match_count can be larger than ${total}.`
+      : "")
+  );
 }
 
 /** Candidates with MTA's ADA status, so a rider can choose among them. */
@@ -659,6 +762,7 @@ async function getServiceAlerts(args: {
     // Stop names in affected_stops come from the station list.
     ...snapshotFooter(["stations"]),
     ...provenance(fetchedAt, feedTimestamp),
+    data_provenance: dataProvenance([{ id: "service-alerts", fetchedAt, feedTimestamp }], ["stations"]),
   };
 }
 
@@ -686,12 +790,13 @@ function resolveStation(args: { query: string; route_id?: string; limit?: number
       source_url: STATIONS.source_url,
       station_count: STATIONS.count,
       route_membership: STATIONS.route_membership,
-      note: "Static snapshot of MTA's subway GTFS, bundled so station lookup makes no network call. MTA updates the regular subway GTFS a few times a year; re-generate with 'npm run stations'.",
+      note: "A station list BetaNYC built from a dated copy of MTA's subway GTFS file (parent stations only), bundled so station lookup makes no network call. Each station's routes are worked out by BetaNYC from MTA's trips and stop times, and the order of the candidates and each score are BetaNYC's own ranking, not MTA's. MTA updates the regular subway GTFS a few times a year; re-generate with 'npm run stations'.",
     },
     ada_data: adaData(),
     ...snapshotFooter(["stations", "station_ada"]),
     // Nothing is fetched; both are bundled copies, dated in snapshot_as_of (issue #13).
     data_source: STATIONS_DATA_SOURCE,
+    data_provenance: dataProvenance([], ["stations", "station_ada"]),
     disclaimer: DISCLAIMER,
   };
 }
@@ -1017,6 +1122,9 @@ async function getAccessibilityOutages(args: {
     : null;
 
   const accessibility = station ? stationAccessibility(station.stop_id) : null;
+  // Only the files this answer read: the inventory places rows only when
+  // there is a station or a name to place them at.
+  const snapshotsUsed: SnapshotName[] = station ? ["equipment", "stations", "station_ada"] : query ? ["equipment"] : [];
 
   return {
     upcoming,
@@ -1060,12 +1168,9 @@ async function getAccessibilityOutages(args: {
     other_station_outages: otherStation,
     inventory_data: inventoryData(),
     ada_data: station ? adaData() : null,
-    // Only the files this answer read: the inventory places rows only when
-    // there is a station or a name to place them at.
-    ...snapshotFooter(
-      station ? ["equipment", "stations", "station_ada"] : query ? ["equipment"] : []
-    ),
+    ...snapshotFooter(snapshotsUsed),
     ...provenance(fetchedAt, undefined, ENE_DATA_SOURCE),
+    data_provenance: dataProvenance([{ id: "elevator-outages", fetchedAt }], snapshotsUsed),
   };
 }
 
@@ -1252,7 +1357,7 @@ export function errorResult(err: unknown): ToolResult {
     } else if (err.timedOut) {
       message = `MTA's feed did not answer within 15 seconds. Try again in a minute. For service right now, check https://www.mta.info.${feed}`;
     } else if (err.status === null) {
-      message = `Could not reach MTA's feed (${err.message.replace(/^.*?: /, "")}). Check this computer's internet connection and try again.${feed}`;
+      message = `Could not reach MTA's feed (${errorSummary(err.reason || err)}). Check this computer's internet connection and try again.${feed}`;
     } else if (err.status === 404) {
       message = `MTA's feed answered 404 Not Found, so the feed address may have moved. Please report a bug in this server at ${REPORT_BUG}.${feed}`;
     } else if (err.status === 429) {
@@ -1264,16 +1369,9 @@ export function errorResult(err: unknown): ToolResult {
     }
     return toolError(`${message}`, { upstreamBody: err.body });
   }
-  // The shared toolError passes the caller's message on as written (shared module 1.5.1), so
-  // a stack trace pasted into an error's message is dropped here: no stack reaches the answer.
-  if (err instanceof Error) return toolError(withoutStackFrames(err.message));
-  return toolError(`The tool failed unexpectedly (${String(err)}). Please report a bug in this server at ${REPORT_BUG}.`);
-}
-
-/** A message with any stack-frame lines ("    at f (file.js:1:2)") taken out. */
-function withoutStackFrames(message: string): string {
-  return message
-    .split(/\r?\n/)
-    .filter((l) => !/^\s+at\s/.test(l))
-    .join("\n");
+  // The tools' own errors are one plain sentence. The shared toolError drops stack-frame lines
+  // and caps the length (shared module 1.5.2); errorSummary also drops a frame line that is not
+  // indented and keeps only the first plain line, so nothing but the sentence reaches the user.
+  if (err instanceof Error) return toolError(errorSummary(err, 1_000));
+  return toolError(`The tool failed unexpectedly (${errorSummary(err)}). Please report a bug in this server at ${REPORT_BUG}.`);
 }

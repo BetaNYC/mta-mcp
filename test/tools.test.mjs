@@ -196,10 +196,17 @@ test("an unresolved station is answered from the bundled station files, with no 
     // Cut to 10, and it says so.
     assert.ok(result.candidate_count > 10, `candidate_count ${result.candidate_count}`);
     assert.equal(result.candidates.length, 10);
-    assert.match(
+    const n = result.candidate_count;
+    assert.equal(
       result.candidates_showing,
-      new RegExp(`^Showing 10 of ${result.candidate_count} candidate stations\\. For the rest, call resolve_station with query 'St' and route_id 'F'`)
+      `Showing 10 of ${n} stations on route F tied for the best match to 'St'. resolve_station with query 'St' and route_id 'F' lists these ${n} first, in pages, then weaker matches, so its match_count can be larger than ${n}.`
     );
+    // The suggested call agrees: its first n rows are exactly the tied candidates.
+    const listed = await call("resolve_station", { query: "St", route_id: "F", limit: 50 });
+    assert.ok(listed.match_count >= n, `match_count ${listed.match_count}`);
+    const tied = listed.candidates.slice(0, n);
+    assert.ok(tied.every((c) => c.score === tied[0].score), "the tied best matches come first");
+    assert.deepEqual(result.candidates.map((c) => c.stop_id), tied.slice(0, 10).map((c) => c.stop_id));
   } finally {
     if (ttl === undefined) delete process.env.MTA_MCP_CACHE_TTL_MS;
     else process.env.MTA_MCP_CACHE_TTL_MS = ttl;
@@ -209,7 +216,7 @@ test("an unresolved station is answered from the bundled station files, with no 
 test("a short candidate list says it shows them all", async () => {
   const result = await call("check_route_on_date", { route_id: "N", date: SAT, station: "86 St" });
   assert.equal(result.candidate_count, 2);
-  assert.equal(result.candidates_showing, "Showing 2 of 2 candidate stations.");
+  assert.equal(result.candidates_showing, "Showing 2 of 2 stations on route N tied for the best match to '86 St'.");
 });
 
 test("the call's route_id narrows a shared station name to one station", async () => {

@@ -141,7 +141,10 @@ export class FeedError extends Error {
     readonly body: string,
     readonly timedOut: boolean = false,
     /** MTA answered 200, but the body was not JSON: a maintenance page, say. */
-    readonly notJson: boolean = false
+    readonly notJson: boolean = false,
+    /** For a request that got no answer: the network error's own text, unfiltered. Tools
+     * pass it through errorSummary before a user sees it. */
+    readonly reason: string = ""
   ) {
     super(message);
     this.name = "FeedError";
@@ -187,7 +190,7 @@ async function attempt(url: string): Promise<Attempt> {
     // Not retried, as before: only an HTTP answer of 429 or 5xx is.
     if (controller.signal.aborted) throw timeoutError();
     const reason = err instanceof Error ? err.message : String(err);
-    throw new FeedError(`MTA feed request failed for ${url}: ${reason}`, url, null, "", false);
+    throw new FeedError(`MTA feed request failed for ${url}: ${reason}`, url, null, "", false, false, reason);
   }
   const text = async (): Promise<string> => {
     try {
@@ -198,7 +201,7 @@ async function attempt(url: string): Promise<Attempt> {
       if (err instanceof FeedError) throw err;
       if (controller.signal.aborted) throw timeoutError();
       const reason = err instanceof Error ? err.message : String(err);
-      throw new FeedError(`MTA feed body could not be read for ${url}: ${reason}`, url, null, "", false);
+      throw new FeedError(`MTA feed body could not be read for ${url}: ${reason}`, url, null, "", false, false, reason);
     } finally {
       clearTimeout(timer);
     }

@@ -78,6 +78,8 @@ test("the path check catches the forms it is meant to", () => {
     "C:\\Users\\x",
     "C:/Users/x/a.zip",
     "D:\\data\\a.zip",
+    "C:/Documents and Settings/x/a.zip",
+    "C:\\Documents and Settings\\x\\a.zip",
     "-Users-x-Code",
     "file:///Users/x/a.zip",
   ];

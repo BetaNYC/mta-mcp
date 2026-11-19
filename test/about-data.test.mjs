@@ -98,13 +98,16 @@ test("an unknown topic is an error that lists the topics", async () => {
   assert.match(r.content[0].text, /service-alerts/);
 });
 
-test("service alerts: what BetaNYC changes comes first, BetaNYC's reading is named as BetaNYC's, MTA's values unaltered", async () => {
+test("service alerts: what BetaNYC changes comes first, BetaNYC's reading is named as BetaNYC's, the text kept is one translation", async () => {
   const s = one((await ask({ topic: "service-alerts" })).structuredContent, "service-alerts");
-  assert.deepEqual(s.changed_by_betanyc.steps, ["filtered", "fields-removed", "merged", "counted"]);
+  assert.deepEqual(s.changed_by_betanyc.steps, ["filtered", "fields-removed", "merged", "counted", "reshaped"]);
   // Leads with what BetaNYC changes, so it agrees with the module's "Changed by BetaNYC" heading.
   assert.match(s.changed_by_betanyc.detail, /^BetaNYC uses part of the feed/);
   assert.match(s.changed_by_betanyc.detail, /separate betanyc object/);
-  assert.match(s.changed_by_betanyc.detail, /MTA's own values are passed on unaltered\.$/);
+  // The three text fields are replaced by one translation each, so "unaltered" would be untrue.
+  assert.match(s.changed_by_betanyc.detail, /keeps one translation as plain text under MTA's field names/);
+  assert.match(s.changed_by_betanyc.detail, /MTA's other values are passed on as MTA gave them\.$/);
+  assert.doesNotMatch(s.changed_by_betanyc.detail, /unaltered/);
   assert.doesNotMatch(s.changed_by_betanyc.detail, /word for word/, "englishText falls back to MTA's first version");
 });
 
@@ -123,5 +126,7 @@ test("elevator outages: BetaNYC's additions are named as such and kept in a beta
   const s = one((await ask({ topic: "elevator-outages" })).structuredContent, "elevator-outages");
   assert.match(s.changed_by_betanyc.detail, /^BetaNYC uses part of the feed/);
   assert.match(s.changed_by_betanyc.detail, /separate betanyc object on each row/);
-  assert.match(s.changed_by_betanyc.detail, /MTA's own values are passed on unaltered\.$/);
+  // Rows are MTA's; the order is BetaNYC's.
+  assert.match(s.changed_by_betanyc.detail, /Each row's own fields are MTA's values as published; the order of the rows is BetaNYC's\.$/);
+  assert.doesNotMatch(s.changed_by_betanyc.detail, /unaltered/);
 });

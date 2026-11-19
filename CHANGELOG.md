@@ -16,6 +16,11 @@ that happens with the release (CONTRIBUTING.md, "Releases").
 
 ### Added
 
+- **Each answer says what BetaNYC did to the data.** Every answer from the four MTA tools
+  has `data_provenance`: one entry per source it used (a live feed or a bundled file), whose
+  `text` starts "BetaNYC modified this data:", says what BetaNYC did to that source, and
+  names MTA's own feed or file as the official record, word for word as `about_data` does.
+  Built with the shared `provenance()` and `changedByBetanyc`. A test checks every tool.
 - Every tool carries MCP `annotations`: a `title`, `readOnlyHint: true`, and `openWorldHint`
   (`true` for the three tools that read MTA's feeds, `false` for `resolve_station`). Each MTA
   tool also has a `title`. (#10)
@@ -46,8 +51,10 @@ that happens with the release (CONTRIBUTING.md, "Releases").
   `paging.showing` says "Showing N of M". Paging is not stable across feed refreshes: the feed
   is cached for 60 seconds, so a later page can come from a newer copy. (#14)
 - `check_route_on_date`, when it cannot pick one station, lists the first 10 candidates at
-  most. `candidate_count` gives the full number and the new `candidates_showing` says "Showing
-  N of M candidate stations" and how to get the rest with `resolve_station`. That answer now
+  most. `candidate_count` gives the full number and the new `candidates_showing` says which
+  stations it counts ("Showing 10 of 26 stations on route F tied for the best match to
+  'St'.") and that `resolve_station` lists those first, then weaker matches, so its
+  `match_count` can be larger. That answer now
   names the bundled station list and ADA status as its `data_source`, dated in
   `snapshot_as_of`, with no `fetched_at`, since no feed is read for it.
 - The server `instructions` now say once what every MTA tool shares (MTA's fields vs.
@@ -59,10 +66,17 @@ that happens with the release (CONTRIBUTING.md, "Releases").
   to MTA says whether it timed out, could not connect, or got an HTTP error, and what to do,
   with MTA's response body after it, cut to 500 characters, and no stack trace. An unknown
   tool name lists the tools there are. Uses the shared `toolError`. (#12)
-- Shared files updated: `src/betanyc-tools.ts` 1.5.1 (from 1.5.0), `scripts/whats_changed.py`
-  and `scripts/mcp_shared/data-sources.schema.json` 1.4.1. Copied unchanged. 1.5.1's
-  `toolError` passes the caller's message on as written, so `errorResult` now drops stack-frame
-  lines from an error's message itself. (#9)
+- Shared files updated: `src/betanyc-tools.ts` 1.5.2 (from 1.5.0), `scripts/whats_changed.py`
+  and `scripts/mcp_shared/data-sources.schema.json` 1.4.1. Copied unchanged. With 1.5.2,
+  `toolError` drops stack-frame lines from the message and caps it at 1,000 characters, and
+  `errorResult` passes every error through the shared `errorSummary`: an error's own message,
+  a network error's text and a thrown value that is not an Error. (#9)
+- `DATA-SOURCES.json` (and `data.json`) say more exactly what BetaNYC does: the station list
+  is BetaNYC's, built from MTA's GTFS file, with BetaNYC's `routes`, order and `score`;
+  outage rows are MTA's, listed in BetaNYC's order; and for an alert's `header_text`,
+  `description_text` and `human_readable_active_period` BetaNYC keeps one translation, MTA's
+  English one (or MTA's first when there is no English), and drops the others. It no longer says MTA's values are "passed on unaltered". `reshaped` is added
+  to the steps for both feeds. `resolve_station`'s `station_data.note` says the same.
 - `scripts/update-stations.mjs --from-zip` records `generated_from` as a local zip the operator
   supplied, said to be a copy of MTA's zip, with its SHA-256. It used to call any such zip a
   "saved copy" of MTA's file. The local path is still never recorded.
@@ -81,7 +95,6 @@ that happens with the release (CONTRIBUTING.md, "Releases").
   SHA-256 (`source_sha256`) instead, and a test fails if any bundled data file contains a local
   path or username. The current snapshot's field was corrected by hand; its zip is gone, so it
   has no `source_sha256` until the next refresh. Station records are unchanged. (#27)
-
 - MTA answering 200 with something that is not JSON (a maintenance page) surfaced the raw
   JSON parse error. It is now one plain sentence saying the feed sent a web page instead of
   data and to try again in a few minutes. It is not cached or retried.
@@ -91,6 +104,17 @@ that happens with the release (CONTRIBUTING.md, "Releases").
   a user whose username is a short word in a station name ("park" and "Park Pl"). It now
   checks path shapes only (now also mounted volumes and Windows user folders), and its folder
   paths work in a checkout whose path has a space.
+- A stack-frame filter in `errorResult` dropped a sentence such as "at least one of stop_id
+  or station is needed" and let a frame with no leading spaces through. It is gone; the
+  shared `toolError` and `errorSummary` do this. The "could not reach MTA" message and a thrown
+  value that is not an Error used to pass on their raw text; both now go through
+  `errorSummary`.
+
+### Known limits
+
+- The bundled `data/stations.json` still says "saved copy of …" in `generated_from` and has
+  no `source_sha256`: refreshing it needs the network, so it was not refreshed here. The
+  source checksum will be recorded at the next refresh (`npm run stations`).
 
 ## [0.3.0] — 2026-11-16
 

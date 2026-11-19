@@ -78,6 +78,44 @@ test("no stack trace reaches the answer", () => {
   assert.doesNotMatch(textOf(r), STACK);
 });
 
+// Stack frames, as the shared module defines them (1.5.2): an indented "at f (file.js:1:2)" line,
+// or the same line not indented. A sentence that merely starts with "at" is not a frame.
+const FRAME_INDENTED = "    at checkRouteOnDate (file:///srv/mta-mcp/dist/tools.js:480:11)";
+const FRAME_FLUSH = "at checkRouteOnDate (file:///srv/mta-mcp/dist/tools.js:480:11)";
+
+test("a sentence that starts with 'at' is kept; real frames are not", () => {
+  const kept = errorResult(new Error("  at least one of stop_id or station is needed"));
+  assert.match(textOf(kept), /^Error: at least one of stop_id or station is needed$/);
+  for (const frame of [FRAME_INDENTED, FRAME_FLUSH]) {
+    const r = errorResult(new Error(`stop_id '999' is not in the bundled station snapshot.\n${frame}`));
+    assert.match(textOf(r), /^Error: stop_id '999' is not in the bundled station snapshot\.$/);
+    assert.doesNotMatch(textOf(r), /tools\.js:480/, frame);
+  }
+  const first = errorResult(new Error(`${FRAME_FLUSH}\nThe real sentence.`));
+  assert.equal(textOf(first), "Error: The real sentence.");
+});
+
+test("a network error's own text is cleaned before it reaches the user", () => {
+  const url = "https://api-endpoint.mta.info/x.json";
+  const reason = `getaddrinfo ENOTFOUND api-endpoint.mta.info\n${FRAME_INDENTED}\n${FRAME_FLUSH}`;
+  const err = new FeedError(`MTA feed request failed for ${url}: ${reason}`, url, null, "", false, false, reason);
+  const text = textOf(errorResult(err));
+  assert.match(text, /^Error: Could not reach MTA's feed \(getaddrinfo ENOTFOUND api-endpoint\.mta\.info\)\. Check/);
+  assert.doesNotMatch(text, /tools\.js:480/);
+  const ctrl = new FeedError("t", url, null, "", false, false, "socket\u0007 hang up");
+  assert.match(textOf(errorResult(ctrl)), /\(socket {2}hang up\)/);
+  assert.doesNotMatch(textOf(errorResult(ctrl)), /\u0007/);
+});
+
+test("a thrown value that is not an Error is summarized, not dumped", () => {
+  const multi = `boom\n${FRAME_INDENTED}\n${FRAME_FLUSH}`;
+  const r = errorResult(multi);
+  assert.match(textOf(r), /^Error: The tool failed unexpectedly \(boom\)\. Please report a bug/);
+  assert.doesNotMatch(textOf(r), /tools\.js:480/);
+  assert.match(textOf(errorResult({ toString: () => `x\n${FRAME_FLUSH}` })), /unexpectedly \(unknown error\)/);
+  assert.match(textOf(errorResult("x".repeat(2000))), /unexpectedly \(x{299}…\)/);
+});
+
 // A 200 that is not JSON, and a body that stalls. Each runs with the cache off, so the stub
 // is what answers.
 async function uncached(fn) {
@@ -114,7 +152,7 @@ test("a 200 maintenance page is a plain sentence, not a JSON parse error", async
   });
 });
 
-test("a body that stalls after the headers times out with the timeout sentence", async () => {
+test("a body that stalls after the headers times out with the timeout sentence", { timeout: 5000 }, async () => {
   setRequestTimeoutForTests(50);
   try {
     await uncached(async () => {

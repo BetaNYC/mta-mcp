@@ -46,11 +46,14 @@ Every tool that reads a live feed adds these fields:
 | `may_not_be_realtime` | Always `true`. MTA publishes no refresh cadence, and the cache alone can add a minute |
 | `staleness_note` | The same point, in words, with the cache length |
 | `data_source` | The feed or feeds this answer read, with a link: the service-alerts feed, the elevator and escalator feeds, or both |
+| `data_provenance` | One entry per source the answer used, feed or bundled file. Each `text` starts "BetaNYC modified this data:", says what BetaNYC did to that source, and names MTA's own feed or file as the official record, the same way `about_data` does. Each entry also has `id` (the `about_data` topic), `source`, `publisher`, `source_url`, `as_of`, `as_of_kind`, `retrieved_at` and `changed_by_betanyc` (`kind: "modified-by-betanyc"` and `detail`) |
 | `disclaimer` | That this is unofficial and riders should confirm at mta.info. Required by MTA's terms |
 
 `resolve_station` reads no feed, so it has a `station_data` block instead,
-plus `data_source` (the bundled station list and ADA status, with links) and
-`disclaimer`.
+plus `data_source` (the bundled station list and ADA status, with links),
+`data_provenance` and `disclaimer`. Its station list is one BetaNYC built
+from MTA's GTFS file: each station's `routes` is worked out by BetaNYC, and the
+order of the candidates and each `score` are BetaNYC's own ranking.
 
 ## Lists come in pages
 
@@ -233,10 +236,10 @@ with no `disrupted` field:
 | `resolved` | `false` |
 | `reason` | Which case this is: no station has that name, the name exists but not on this route, or several stations on this route tie |
 | `candidate_count` | How many stations match, all of them |
-| `candidates_showing` | A sentence like "Showing 10 of 26 candidate stations." and, when some are left out, how to get the rest with `resolve_station` |
+| `candidates_showing` | Which stations `candidate_count` counts, and how to get the rest. For a tie: "Showing 10 of 26 stations on route F tied for the best match to 'St'.", then that `resolve_station` with the same name and route lists those 26 first and then weaker matches, so its `match_count` can be larger. When the name is on other routes only, the count is every name match |
 | `candidates` | The first 10 matching stations at most, with their routes, scores, and ADA status. `candidate_count` gives the full number |
 | `snapshot_as_of` | The dates of the bundled station list and ADA status this answer came from |
-| `data_source`, `disclaimer` | The bundled station list and ADA status, with links, and the usual disclaimer |
+| `data_source`, `data_provenance`, `disclaimer` | The bundled station list and ADA status, with links, what BetaNYC did to each, and the usual disclaimer |
 
 The list is cut to 10, so a common name (`"St"`, `"Av"`) can match more
 stations than it shows; `resolve_station` with the same name pages through

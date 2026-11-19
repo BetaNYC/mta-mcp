@@ -45,9 +45,10 @@
           "filtered",
           "fields-removed",
           "merged",
-          "counted"
+          "counted",
+          "reshaped"
         ],
-        "detail": "BetaNYC uses part of the feed: each answer keeps the alerts for the route, date or station asked about, and the English text where MTA gives one (MTA's terms allow an app to use some but not all of the data). It adds stop names from the station list (topic stations), and check_route_on_date can add the station's accessibility status and elevator outages. Next to MTA's fields, in a separate betanyc object on each alert, BetaNYC adds its own reading: an effect from MTA's alert type, whether it counts as a disruption, and whether it is planned work. check_route_on_date gives a yes-or-no answer from that reading, and get_service_alerts counts the alerts it reads as disruptions. These are BetaNYC's, not MTA's data. MTA's own values are passed on unaltered."
+        "detail": "BetaNYC uses part of the feed: each answer keeps the alerts for the route, date or station asked about (MTA's terms allow an app to use some but not all of the data). For header_text, description_text and human_readable_active_period, BetaNYC keeps one translation as plain text under MTA's field names (MTA's English one, or MTA's first one when there is no English) and drops the other translations. It adds stop names from the station list (topic stations), and check_route_on_date can add the station's accessibility status and elevator outages. Next to MTA's fields, in a separate betanyc object on each alert, BetaNYC adds its own reading: an effect from MTA's alert type, whether it counts as a disruption, and whether it is planned work. check_route_on_date gives a yes-or-no answer from that reading, and get_service_alerts counts the alerts it reads as disruptions. These are BetaNYC's, not MTA's data. MTA's other values are passed on as MTA gave them."
       },
       "verify_at": "https://www.mta.info/alerts",
       "freshness": {
@@ -100,9 +101,10 @@
         "steps": [
           "filtered",
           "merged",
-          "address-matched"
+          "address-matched",
+          "reshaped"
         ],
-        "detail": "BetaNYC uses part of the feed: each answer keeps the outages for the station, line or date asked about (MTA's terms allow an app to use some but not all of the data). In a separate betanyc object on each row, BetaNYC adds the station the outage is placed at, found by joining MTA's equipment number to MTA's elevator inventory (topic elevator-inventory) or, when that fails, by matching MTA's station name; how it was matched; a note when the evidence is mixed; and the inventory's details for that equipment, including MTA's alternate route. These are BetaNYC's additions, not MTA's data. MTA's own values are passed on unaltered."
+        "detail": "BetaNYC uses part of the feed: each answer keeps the outages for the station, line or date asked about (MTA's terms allow an app to use some but not all of the data), and when a station or name is given, lists them in BetaNYC's own order, best station match first. In a separate betanyc object on each row, BetaNYC adds the station the outage is placed at, found by joining MTA's equipment number to MTA's elevator inventory (topic elevator-inventory) or, when that fails, by matching MTA's station name; how it was matched; a note when the evidence is mixed; and the inventory's details for that equipment, including MTA's alternate route. These are BetaNYC's additions, not MTA's data. Each row's own fields are MTA's values as published; the order of the rows is BetaNYC's."
       },
       "verify_at": "https://www.mta.info/elevator-escalator-status",
       "freshness": {
@@ -157,7 +159,7 @@
           "merged",
           "reshaped"
         ],
-        "detail": "Only parent stations are kept (location_type 1), with their id, name and location. The routes serving each station are worked out by joining the GTFS trips and stop times."
+        "detail": "BetaNYC builds its own station list from MTA's GTFS file. Only parent stations are kept (location_type 1), with their id, name and location. The routes field on each station is worked out by BetaNYC, by joining the GTFS trips and stop times. When a tool lists matching stations, their order and each candidate's score are BetaNYC's own ranking of how well the name matches, not MTA's."
       },
       "verify_at": "https://www.mta.info/developers",
       "freshness": {

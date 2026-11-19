@@ -590,6 +590,11 @@ updates a few times a year. A new or renamed station won't resolve
 until the file is regenerated. An unrecognized `stop_id` returns a clear
 error. It does not answer for the whole route.
 
+The bundled `data/stations.json` does not yet record the SHA-256 of the MTA
+zip it was built from (`source_sha256`), and its `generated_from` still reads
+"saved copy of …". Refreshing it needs the network, so it was left as is: the
+source checksum will be recorded at the next refresh (`npm run stations`).
+
 The ADA status and equipment inventory are snapshots too, from data.ny.gov.
 MTA posts station ADA status as needed, so a newly accessible station can
 lag. How to refresh all three, and the warnings you'll see when they're old:
