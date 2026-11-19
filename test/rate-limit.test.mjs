@@ -26,7 +26,8 @@ function status(code, headers = {}) {
 
 globalThis.fetch = async () => {
   fetchCount += 1;
-  requestedAt.push(Date.now());
+  // The gate's own clock, so the measurement and the guarantee agree (issue #6).
+  requestedAt.push(performance.now());
   const next = nextResponses.length > 0 ? nextResponses.shift() : ok();
   return next();
 };
@@ -104,6 +105,14 @@ test("concurrent calls for one URL share a single request", async () => {
 });
 
 // ─── Mechanism 3: global minimum interval ────────────────────────────────────
+//
+// The gate stamps its clock just before it lets a request go; the stub stamps
+// when fetch is reached, a little later. That offset differs between two
+// requests, and on a busy CI runner by more than a fraction of a millisecond,
+// so the measured gap may fall a little short of the gate's. SLACK_MS covers
+// that. It is small next to what it guards: a missing gate gives a gap near
+// 0 ms, and a backoff that is skipped gives near 0 instead of 1000 (issue #6).
+const SLACK_MS = 5;
 
 test("sequential requests are spaced by at least the minimum interval", async () => {
   reset();
@@ -113,7 +122,7 @@ test("sequential requests are spaced by at least the minimum interval", async ()
   await fetchFeed(url("gap-b"));
   assert.equal(fetchCount, 2);
   const gap = requestedAt[1] - requestedAt[0];
-  assert.ok(gap >= 150, `expected >= 150ms between requests, got ${gap}ms`);
+  assert.ok(gap >= 150 - SLACK_MS, `expected >= 150ms between requests, got ${gap.toFixed(3)}ms`);
   delete process.env.MTA_MCP_CACHE_TTL_MS;
 });
 
@@ -124,7 +133,7 @@ test("the gate is global: different URLs fired at once still queue", async () =>
   await Promise.all([fetchFeed(url("global-a")), fetchFeed(url("global-b"))]);
   assert.equal(fetchCount, 2);
   const gap = requestedAt[1] - requestedAt[0];
-  assert.ok(gap >= 150, `expected >= 150ms between two different URLs, got ${gap}ms`);
+  assert.ok(gap >= 150 - SLACK_MS, `expected >= 150ms between two different URLs, got ${gap.toFixed(3)}ms`);
   delete process.env.MTA_MCP_CACHE_TTL_MS;
 });
 
@@ -150,12 +159,14 @@ test("a 429 is retried, honoring Retry-After", async () => {
   reset();
   process.env.MTA_MCP_MIN_INTERVAL_MS = "0";
   nextResponses = [status(429, { "retry-after": "0" }), ok()];
-  const started = Date.now();
   const result = await fetchFeed(url("throttled"));
   assert.equal(fetchCount, 2);
   assert.equal(result.fromCache, false);
-  // Retry-After: 0 cannot shorten the 1s backoff floor.
-  assert.ok(Date.now() - started >= 1000, "backoff is a floor, not a ceiling");
+  // Retry-After: 0 cannot shorten the 1s backoff floor. Measured between the two
+  // requests on the monotonic clock: a timer can wake a fraction of a millisecond
+  // early, and Date.now can read 999 ms for a full second.
+  const gap = requestedAt[1] - requestedAt[0];
+  assert.ok(gap >= 1000 - SLACK_MS, `backoff is a floor, not a ceiling: got ${gap.toFixed(3)}ms`);
 });
 
 test("retries are bounded — a persistent 500 stops after two", async () => {
