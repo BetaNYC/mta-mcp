@@ -7,11 +7,20 @@ This page lists the changes to mta-mcp that a reader would notice: new tools, ne
 
 mta-mcp is not published to npm. You run it from your own copy of the repository, so a change reaches you when you update that copy and rebuild it. To report a bug in this server or ask for a new feature, [open an issue on GitHub](https://github.com/BetaNYC/mta-mcp/issues).
 
-## Unreleased: Ask where the data comes from, and BetaNYC's additions are marked
+## Unreleased: Lists come in pages, and elevator answers name the right source
+
+- **Tags:** MCP, Correction
+- **What changed:** Long answers now come in pages. The tools for service alerts and for elevator and escalator outages used to give you every alert or outage at once. Now they give you one page: 20 alerts or 50 outages, and station matches 10 at a time. Each answer says "Showing N of M" and how to get the next page; your AI app can ask for the next page, or for up to 100 alerts or 200 outages at once. The totals always count everything, not just the page. When a station name matches several stations, the route check lists 10 of them at most, says how many there are in all, and says it read only the station list kept in the repository, not MTA's live feed. When MTA's feed sends a web page instead of data, for example during maintenance, the answer now says so in a plain sentence. Every answer now says what BetaNYC did to MTA's data and names MTA's own feed or file as the official record, as the where-does-this-come-from tool already did: for example, the station list is one BetaNYC built from MTA's schedule file, and the order of station matches and their scores are BetaNYC's. Answers about elevators and escalators now name the feed they came from, MTA's elevator and escalator outage feeds; they used to name the service-alerts feed by mistake. A station search now says how many stations match in all; it used to stop counting at 10. Every tool now tells your AI app that it only reads and never changes anything, and whether it reaches out to MTA's live feeds or answers from the copies kept in the repository. When something goes wrong, the answer is one plain sentence saying what happened and what to try. The copies of MTA's station and elevator data kept in the repository now carry a checksum, so a damaged or hand-edited copy is caught.
+- **If you used the old numbers:** If you cited where an elevator or escalator answer came from, the source was MTA's elevator and escalator outage feeds, not the service-alerts feed. If you relied on a station search's match count, it was never more than 10; search again for the full count. No alert, outage or station figure was wrong.
+- **Who it affects:** Anyone who quoted the data source of an elevator or escalator answer, or who reads the full list of alerts or outages: ask for the next page to see the rest.
+- **MCP version:** [mta-mcp 0.4.0](CHANGELOG.md)
+- **More detail:** [Tool reference](docs/tools.md) · [Lists come in pages](docs/tools.md#lists-come-in-pages)
+
+## 2026-11-16: Ask where the data comes from, and BetaNYC's additions are marked
 
 - **Tags:** MCP
 - **What changed:** Every answer now keeps what BetaNYC adds apart from MTA's own information. For a service alert, BetaNYC's reading, such as whether it counts as a disruption and what it means for riders, sits in a separate part of the answer labeled betanyc. For an elevator or escalator outage, the same part holds how BetaNYC placed it at a station and the details from MTA's equipment list, including MTA's alternate route. That way BetaNYC's work is never mistaken for MTA's data. If you use these answers in your own tools, read those fields from their new place. A new tool lets your AI assistant answer "where does this come from?" for any answer from this server. It names the source behind each kind of data: MTA's live feeds for service alerts and elevator outages, and MTA's station list, station accessibility status and elevator inventory, which this server keeps as dated copies. For each, it says whether the figures are MTA's own record or have been changed by BetaNYC, how current they are on your copy, where to check a figure at MTA, and where to report a mistake. It also gives BetaNYC's address for questions about the data, lab@beta.nyc.
-- **MCP version:** [mta-mcp 0.3.0](CHANGELOG.md)
+- **MCP version:** [mta-mcp 0.3.0](CHANGELOG.md#030--2026-11-16)
 - **More detail:** [Where the data comes from](DATA-SOURCES.json) · [Data sources](docs/data-sources.md)
 
 ## 2026-11-12: A What's changed page, and two tools that explain the server

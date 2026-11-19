@@ -9,7 +9,114 @@ This package is not published to npm. Version numbers track the local build. See
 
 ## [Unreleased]
 
-## [0.3.0] — Unreleased
+## [0.4.0] — Unreleased
+
+BetaNYC's MCP practices (epic #19). The version number in `package.json` is not yet bumped;
+that happens with the release (CONTRIBUTING.md, "Releases").
+
+### Added
+
+- **Each answer says what BetaNYC did to the data.** Every answer from the four MTA tools
+  has `data_provenance`: one entry per source it used (a live feed or a bundled file), whose
+  `text` starts "BetaNYC modified this data:", says what BetaNYC did to that source, and
+  names MTA's own feed or file as the official record, word for word as `about_data` does.
+  Built with the shared `provenance()` and `changedByBetanyc`. A test checks every tool.
+- Every tool carries MCP `annotations`: a `title`, `readOnlyHint: true`, and `openWorldHint`
+  (`true` for the three tools that read MTA's feeds, `false` for `resolve_station`). Each MTA
+  tool also has a `title`. (#10)
+- `limit` and `offset` on `get_service_alerts` (default 20, maximum 100), `resolve_station`
+  (default 10, maximum 50) and `get_accessibility_outages` (default 50, maximum 200), with the
+  bounds in each input schema. A limit over the maximum is an error. Each answer gains a
+  `paging` block: `total`, `returned`, `offset`, `limit`, `next_offset` and `showing` ("Showing
+  20 of 63 alerts (1 to 20). More are available: call again with offset 20."). (#14)
+- `resolve_station` answers carry `data_source` and `disclaimer`, like the other tools. (#13)
+- `data/SHA256SUMS`: the SHA-256 of each bundled snapshot, rewritten by both update scripts
+  and by `scripts/data-checksums.mjs`, and checked by `npm test`. (#15)
+- A test caps the size of the tool list plus the server instructions. (#11)
+- `eval/`: twelve realistic questions with known answers, run offline against the saved feeds
+  by `npm run eval`; results saved in `eval/runs/`. (#16)
+- Tests that stdout carries only JSON-RPC in server mode (#17), and that neither `npm test`
+  nor CI runs the live smoke check.
+
+### Changed
+
+- **Breaking for anyone who read the whole list:** `get_service_alerts` returns 20 alerts per
+  call by default, where it used to return every alert. `alert_count` and
+  `disrupting_alert_count` still count every match. (#14)
+- **Breaking for anyone who read the whole list:** `get_accessibility_outages` returns 50 rows
+  per call by default, where it used to return every row. `outage_count` now counts every
+  match, not just the rows returned. (#14)
+- To get the rest from either tool, call again with `offset: paging.next_offset` until it is
+  `null`, or ask for more at once with `limit` (at most 100 alerts or 200 outages).
+  `paging.showing` says "Showing N of M". Paging is not stable across feed refreshes: the feed
+  is cached for 60 seconds, so a later page can come from a newer copy. (#14)
+- `check_route_on_date`, when it cannot pick one station, lists the first 10 candidates at
+  most. `candidate_count` gives the full number and the new `candidates_showing` says which
+  stations it counts ("Showing 10 of 26 stations on route F tied for the best match to
+  'St'.") and that `resolve_station` lists those first, then weaker matches, so its
+  `match_count` can be larger. That answer now
+  names the bundled station list and ADA status as its `data_source`, dated in
+  `snapshot_as_of`, with no `fetched_at`, since no feed is read for it.
+- The server `instructions` now say once what every MTA tool shares (MTA's fields vs.
+  BetaNYC's `betanyc` object, the dated snapshots and `snapshot_as_of`/`snapshot_warning`,
+  paging), and the tool descriptions no longer repeat it. The about_data paragraph is
+  unchanged. (#18)
+- Errors are one plain sentence saying what went wrong and what to try. A wrongly typed or
+  missing argument is named (it used to return zod's raw issue list as JSON). A failed request
+  to MTA says whether it timed out, could not connect, or got an HTTP error, and what to do,
+  with MTA's response body after it, cut to 500 characters, and no stack trace. An unknown
+  tool name lists the tools there are. Uses the shared `toolError`. (#12)
+- Shared files updated: `src/betanyc-tools.ts` 1.5.2 (from 1.5.0), `scripts/whats_changed.py`
+  and `scripts/mcp_shared/data-sources.schema.json` 1.4.1. Copied unchanged. With 1.5.2,
+  `toolError` drops stack-frame lines from the message and caps it at 1,000 characters, and
+  `errorResult` passes every error through the shared `errorSummary`: an error's own message,
+  a network error's text and a thrown value that is not an Error. (#9)
+- `DATA-SOURCES.json` (and `data.json`) say more exactly what BetaNYC does: the station list
+  is BetaNYC's, built from MTA's GTFS file, with BetaNYC's `routes`, order and `score`;
+  outage rows are MTA's, listed in BetaNYC's order; and for an alert's `header_text`,
+  `description_text` and `human_readable_active_period` BetaNYC keeps one translation, MTA's
+  English one (or MTA's first when there is no English), and drops the others. It no longer says MTA's values are "passed on unaltered". `reshaped` is added
+  to the steps for both feeds. `resolve_station`'s `station_data.note` says the same.
+- `scripts/update-stations.mjs --from-zip` records `generated_from` as a local zip the operator
+  supplied, said to be a copy of MTA's zip, with its SHA-256. It used to call any such zip a
+  "saved copy" of MTA's file. The local path is still never recorded.
+- The 15-second request timeout now covers reading the response body too, not only the
+  headers.
+
+### Fixed
+
+- `get_accessibility_outages` named the subway service-alerts feed as its `data_source`. It
+  now names MTA's elevator and escalator outage feeds, and `check_route_on_date` with
+  `include_accessibility` names both feeds it read. (#13)
+- `resolve_station`'s `match_count` stopped at 10. It now counts every station that matches,
+  and the candidates come in pages. (#14)
+- `data/stations.json` recorded the local path of the zip it was built from, which named a
+  machine and a user. `scripts/update-stations.mjs` now records the MTA zip's URL and its
+  SHA-256 (`source_sha256`) instead, and a test fails if any bundled data file contains a local
+  path or username. The current snapshot's field was corrected by hand; its zip is gone, so it
+  has no `source_sha256` until the next refresh. Station records are unchanged. (#27)
+- MTA answering 200 with something that is not JSON (a maintenance page) surfaced the raw
+  JSON parse error. It is now one plain sentence saying the feed sent a web page instead of
+  data and to try again in a few minutes. It is not cached or retried.
+- `check_route_on_date`'s answer when it cannot pick one station named the service-alerts feed
+  as its source and gave a `fetched_at`, though no feed was read for it.
+- The local-path test also matched this machine's username anywhere, so `npm test` failed for
+  a user whose username is a short word in a station name ("park" and "Park Pl"). It now
+  checks path shapes only (now also mounted volumes and Windows user folders), and its folder
+  paths work in a checkout whose path has a space.
+- A stack-frame filter in `errorResult` dropped a sentence such as "at least one of stop_id
+  or station is needed" and let a frame with no leading spaces through. It is gone; the
+  shared `toolError` and `errorSummary` do this. The "could not reach MTA" message and a thrown
+  value that is not an Error used to pass on their raw text; both now go through
+  `errorSummary`.
+
+### Known limits
+
+- The bundled `data/stations.json` still says "saved copy of …" in `generated_from` and has
+  no `source_sha256`: refreshing it needs the network, so it was not refreshed here. The
+  source checksum will be recorded at the next refresh (`npm run stations`).
+
+## [0.3.0] — 2026-11-16
 
 Adds `about_data`, the third tool BetaNYC is adding to each of its MCP servers, and keeps
 BetaNYC's reading of each service alert apart from MTA's fields. **The alert output changes

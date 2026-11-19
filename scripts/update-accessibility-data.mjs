@@ -31,6 +31,7 @@
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { writeChecksums } from "./data-checksums.mjs";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = join(HERE, "..", "data");
@@ -361,6 +362,8 @@ async function main(argv) {
       equipment.records
     )
   );
+
+  writeChecksums();
 
   process.stdout.write(
     `${JSON.stringify({ station_ada: ada.summary, equipment: { ...equipment.summary, unresolved: equipment.summary.unresolved.length } }, null, 2)}\n`

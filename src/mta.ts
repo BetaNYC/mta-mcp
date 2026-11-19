@@ -31,6 +31,10 @@ export const ENE_UPCOMING_URL = `${BASE}/nyct%2Fnyct_ene_upcoming.json`;
 
 export const DATA_SOURCE =
   "MTA service alerts (GTFS-realtime JSON with Mercury extensions), https://api.mta.info/#/serviceAlerts";
+export const ENE_DATA_SOURCE =
+  "MTA elevator and escalator outage feeds (current and upcoming, JSON), https://api.mta.info/#/EAndEFeeds";
+export const STATIONS_DATA_SOURCE =
+  "MTA regular subway GTFS (static schedule data, a dated copy bundled with this server), https://rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip; station ADA status from MTA Subway Stations on data.ny.gov (a dated copy), https://data.ny.gov/Transportation/MTA-Subway-Stations/39hk-dx4f";
 export const DISCLAIMER =
   "Unofficial. BetaNYC is not the MTA and makes no claim that this data is accurate, complete, or timely. Confirm service at https://www.mta.info before you travel.";
 
@@ -45,7 +49,8 @@ export const DISCLAIMER =
 //   2. Single-flight so concurrent calls for one URL share one request
 //   3. A process-wide 1 s minimum interval between ANY two upstream requests
 //   4. Bounded retry (2 attempts, 1 s then 2 s) honoring Retry-After
-//   5. A 15 s request timeout so a hung request cannot pin the gate
+//   5. A 15 s request timeout, covering the body as well as the headers, so a
+//      hung request cannot pin the gate
 //   6. An identifying User-Agent, so MTA can reach us about load
 //
 // There is deliberately no background polling, no prefetch, and no warm-up
@@ -75,6 +80,14 @@ function envMs(name: string, fallback: number): number {
 export const cacheTtlMs = (): number => envMs("MTA_MCP_CACHE_TTL_MS", DEFAULT_CACHE_TTL_MS);
 export const minIntervalMs = (): number =>
   envMs("MTA_MCP_MIN_INTERVAL_MS", DEFAULT_MIN_INTERVAL_MS);
+
+let requestTimeoutMs = REQUEST_TIMEOUT_MS;
+
+/** Tests only: a shorter request timeout, so a stalled body can be tested in
+ * milliseconds. Pass null to restore 15 s. It changes no fetch, retry or wait. */
+export function setRequestTimeoutForTests(ms: number | null): void {
+  requestTimeoutMs = ms ?? REQUEST_TIMEOUT_MS;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -121,36 +134,106 @@ function throughGate<T>(run: () => Promise<T>): Promise<T> {
   return turn.then(run);
 }
 
-/** Mechanisms 4 + 5 + 6: one attempt, with a timeout and identifying headers. */
-async function attempt(url: string): Promise<Response> {
-  const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
-  try {
-    return await fetch(url, {
-      headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
-      signal: controller.signal,
-    });
-  } finally {
-    clearTimeout(timer);
+/**
+ * A failed request to MTA, with what a tool needs to say so plainly: the HTTP
+ * status (null when no answer came back), whether it timed out, and MTA's
+ * response body (already cut to MAX_ERROR_BODY_CHARS). The message is for logs
+ * and tests; tools build their own sentence from the fields (src/tools.ts).
+ */
+export class FeedError extends Error {
+  constructor(
+    message: string,
+    readonly url: string,
+    readonly status: number | null,
+    readonly body: string,
+    readonly timedOut: boolean = false,
+    /** MTA answered 200, but the body was not JSON: a maintenance page, say. */
+    readonly notJson: boolean = false,
+    /** For a request that got no answer: the network error's own text, unfiltered. Tools
+     * pass it through errorSummary before a user sees it. */
+    readonly reason: string = ""
+  ) {
+    super(message);
+    this.name = "FeedError";
   }
 }
 
-async function errorFromResponse(url: string, res: Response): Promise<Error> {
+const TIMED_OUT = Symbol("timed out");
+
+/** One answer from MTA, and a way to read its body under the same deadline. */
+type Attempt = { res: Response; text: () => Promise<string> };
+
+/**
+ * Mechanisms 4 + 5 + 6: one attempt, with a timeout and identifying headers.
+ * The 15 s deadline runs from the request to the end of the body, so a server
+ * that sends headers and then stalls is cut off too.
+ */
+async function attempt(url: string): Promise<Attempt> {
+  const controller = new AbortController();
+  let expire: () => void = () => {};
+  const expired = new Promise<typeof TIMED_OUT>((resolve) => {
+    expire = () => resolve(TIMED_OUT);
+  });
+  const timer = setTimeout(() => {
+    controller.abort();
+    expire();
+  }, requestTimeoutMs);
+  const timeoutError = () =>
+    new FeedError(
+      `MTA feed request timed out after ${requestTimeoutMs / 1000}s for ${url}`,
+      url,
+      null,
+      "",
+      true
+    );
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      headers: { "User-Agent": USER_AGENT, Accept: "application/json" },
+      signal: controller.signal,
+    });
+  } catch (err) {
+    clearTimeout(timer);
+    // Not retried, as before: only an HTTP answer of 429 or 5xx is.
+    if (controller.signal.aborted) throw timeoutError();
+    const reason = err instanceof Error ? err.message : String(err);
+    throw new FeedError(`MTA feed request failed for ${url}: ${reason}`, url, null, "", false, false, reason);
+  }
+  const text = async (): Promise<string> => {
+    try {
+      const out = await Promise.race([res.text(), expired]);
+      if (out === TIMED_OUT) throw timeoutError();
+      return out;
+    } catch (err) {
+      if (err instanceof FeedError) throw err;
+      if (controller.signal.aborted) throw timeoutError();
+      const reason = err instanceof Error ? err.message : String(err);
+      throw new FeedError(`MTA feed body could not be read for ${url}: ${reason}`, url, null, "", false, false, reason);
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  return { res, text };
+}
+
+function cutBody(text: string): string {
+  const body = text.trim();
+  return body.length > MAX_ERROR_BODY_CHARS ? `${body.slice(0, MAX_ERROR_BODY_CHARS)}… (truncated)` : body;
+}
+
+async function errorFromResponse(url: string, { res, text }: Attempt): Promise<FeedError> {
   let body = "";
   try {
-    body = (await res.text()).trim();
+    body = cutBody(await text());
   } catch {
-    // body unreadable; fall through with empty text
-  }
-  if (body.length > MAX_ERROR_BODY_CHARS) {
-    body = `${body.slice(0, MAX_ERROR_BODY_CHARS)}… (truncated)`;
+    // body unreadable or too slow; fall through with empty text
   }
   let message = `MTA feed error ${res.status} ${res.statusText} for ${url}`;
   if (res.status === 404) {
     message += " — the feed URL may have moved; check https://api.mta.info/.";
   }
   if (body) message += ` Response body: ${body}`;
-  return new Error(message);
+  return new FeedError(message, url, res.status, body);
 }
 
 /** A 4xx other than 429 is our bug, not congestion. Retrying it is just load. */
@@ -183,17 +266,34 @@ export async function fetchFeed(url: string): Promise<FeedResult> {
   }
 
   const work = (async (): Promise<CacheEntry> => {
-    let lastError: Error | undefined;
+    let lastError: FeedError | undefined;
     let wait = 0;
     for (let tryNo = 0; tryNo <= MAX_RETRIES; tryNo++) {
       if (wait > 0) await sleep(wait);
-      const res = await throughGate(() => attempt(url));
+      const answer = await throughGate(() => attempt(url));
+      const { res } = answer;
       if (res.ok) {
-        const entry = { fetchedAt: Date.now(), body: await res.json() };
+        const raw = await answer.text();
+        let body: unknown;
+        try {
+          body = JSON.parse(raw);
+        } catch {
+          // A 200 that is not JSON (MTA's maintenance page, say). Not cached and
+          // not retried: the next tool call asks again, no sooner than before.
+          throw new FeedError(
+            `MTA feed answered ${res.status} for ${url}, but not with JSON`,
+            url,
+            res.status,
+            cutBody(raw),
+            false,
+            true
+          );
+        }
+        const entry = { fetchedAt: Date.now(), body };
         cache.set(url, entry);
         return entry;
       }
-      lastError = await errorFromResponse(url, res);
+      lastError = await errorFromResponse(url, answer);
       if (!isRetryable(res.status)) throw lastError;
       // Backoff is 1 s then 2 s. A Retry-After can extend that but never
       // shorten it, so honoring the server cannot make us more aggressive.
@@ -566,7 +666,7 @@ export function resolveStationMatches(
         a.stop_name.length - b.stop_name.length ||
         (a.stop_id < b.stop_id ? -1 : 1)
     )
-    .slice(0, opts.limit ?? 10);
+    .slice(0, opts.limit ?? Infinity);
 }
 
 export type StationResolution =

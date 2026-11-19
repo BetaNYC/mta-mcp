@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { z } from "zod";
 import {
   type Alert,
@@ -11,7 +12,10 @@ import {
   type StationMatch,
   DATA_SOURCE,
   DISCLAIMER,
+  ENE_DATA_SOURCE,
+  STATIONS_DATA_SOURCE,
   EFFECT_BY_ALERT_TYPE,
+  FeedError,
   ENE_CURRENT_URL,
   EQUIPMENT,
   STATION_ADA,
@@ -45,7 +49,14 @@ import {
   VERSION,
 } from "./mta.js";
 import { type SnapshotName, SNAPSHOTS, snapshotFooter, stationListHint } from "./freshness.js";
-import { createBetanycTools } from "./betanyc-tools.js";
+import {
+  type ToolResult,
+  annotateTools,
+  createBetanycTools,
+  errorSummary,
+  provenance as sourceLine,
+  toolError,
+} from "./betanyc-tools.js";
 
 /**
  * whats_changed, about_betanyc and about_data, the three tools BetaNYC is adding to each of its
@@ -73,6 +84,59 @@ export const betanyc = createBetanycTools({
   },
 });
 
+// List limits (issue #14): a default, a hard maximum, and offset to page. Counts in each
+// answer (alert_count, outage_count, match_count) always cover every match, not just the page.
+export const LIMITS = {
+  get_service_alerts: { default: 20, max: 100, noun: "alerts" },
+  get_accessibility_outages: { default: 50, max: 200, noun: "outages" },
+  resolve_station: { default: 10, max: 50, noun: "stations" },
+} as const;
+
+function pagingProps(tool: keyof typeof LIMITS) {
+  const l = LIMITS[tool];
+  return {
+    limit: {
+      type: "integer",
+      minimum: 1,
+      maximum: l.max,
+      description: `Most ${l.noun} to return. Default ${l.default}, maximum ${l.max}.`,
+    },
+    offset: {
+      type: "integer",
+      minimum: 0,
+      description: `Skip this many ${l.noun} first, to page through. Default 0; each answer's paging.next_offset gives the next one.`,
+    },
+  };
+}
+
+const pagingArgs = (tool: keyof typeof LIMITS) => ({
+  limit: z.number().int().min(1).max(LIMITS[tool].max).optional(),
+  offset: z.number().int().min(0).optional(),
+});
+
+/** One page of a list, and a paging block saying "showing N of M" and how to get the rest. */
+export function page<T>(items: T[], tool: keyof typeof LIMITS, args: { limit?: number; offset?: number }) {
+  const { default: def, noun } = LIMITS[tool];
+  const limit = args.limit ?? def;
+  const offset = args.offset ?? 0;
+  const rows = items.slice(offset, offset + limit);
+  const next = offset + rows.length < items.length ? offset + rows.length : null;
+  const range = rows.length > 0 ? ` (${offset + 1} to ${offset + rows.length})` : "";
+  return {
+    rows,
+    paging: {
+      total: items.length,
+      returned: rows.length,
+      offset,
+      limit,
+      next_offset: next,
+      showing:
+        `Showing ${rows.length} of ${items.length} ${noun}${range}.` +
+        (next !== null ? ` More are available: call again with offset ${next}.` : ""),
+    },
+  };
+}
+
 const EFFECTS = [
   "reduced",
   "changed",
@@ -83,11 +147,27 @@ const EFFECTS = [
   "unknown",
 ] as const;
 
-export const TOOLS = [
+/**
+ * The server's MCP `instructions`: what holds for every MTA tool, said once here
+ * instead of in each description (issue #18), then when to call the three shared tools.
+ */
+export const INSTRUCTIONS: string = [
+  "NYC subway service alerts, elevator and escalator outages, and station lookup, from MTA's public feeds, by BetaNYC. Unofficial: BetaNYC is not the MTA, and riders should confirm service at https://www.mta.info before they travel.",
+  "In every answer, MTA's own fields are as MTA published them. What BetaNYC works out from them is kept apart in a `betanyc` object: for an alert, its effect, whether it counts as a disruption, whether it is planned work and whether its alert type is recognized; for an outage, how it was placed at a station and MTA's inventory details. Answers such as `disrupted` are BetaNYC's, not MTA's.",
+  "Station names, routes, ADA status and the elevator inventory come from dated copies bundled with this server, which the user must refresh; `snapshot_as_of` gives their dates and `snapshot_warning` flags old ones. Service alerts and outages are read live from MTA, cached up to a minute, and may not be real time.",
+  "Long lists come in pages: `paging.showing` says how many there are, and `offset: paging.next_offset` gets the next page. Counts cover every match.",
+  betanyc.instructions,
+].join("\n\n");
+
+// Every tool only reads (readOnlyHint: true). openWorldHint is true for the three that call
+// MTA's live feeds, false for resolve_station, which answers from the bundled snapshots.
+// The shared tools declare their own annotations. Issue #10.
+export const TOOLS = annotateTools([
   {
     name: "check_route_on_date",
+    title: "Is a subway route disrupted on a date?",
     description:
-      "Is a subway route disrupted on a given date, optionally at one station? Dates are interpreted in America/New_York. Answers from MTA's service-alert feed. A station that only GAINS service (an express train running local) is reported as affected but NOT disrupted. Station-level absence is not absence of impact — read station_level_detail before treating disrupted:false as a guarantee. The station carries MTA's ADA status; elevator outages are included only with include_accessibility:true. Each alert's own fields are MTA's; BetaNYC's reading of it (effect, counts_as_disruption, planned, alert_type_recognized, and whether it bears on the station) is in its `betanyc` object, and disrupted is BetaNYC's answer from those, not MTA's. Station names and ADA status come from local snapshots the user must refresh; snapshot_as_of gives their dates and snapshot_warning flags old ones.",
+      "Is a subway route disrupted on a given date, optionally at one station? Dates are interpreted in America/New_York. Answers from MTA's service-alert feed. A station that only GAINS service (an express train running local) is reported as affected but NOT disrupted. Station-level absence is not absence of impact — read station_level_detail before treating disrupted:false as a guarantee. The station carries MTA's ADA status; elevator outages are included only with include_accessibility:true. Each alert's `betanyc` object also says whether it bears on the station, and disrupted is BetaNYC's answer from those readings, not MTA's.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -117,8 +197,9 @@ export const TOOLS = [
   },
   {
     name: "get_service_alerts",
+    title: "Subway service alerts",
     description:
-      "List MTA subway service alerts active on a date, with optional filters. Defaults to today in America/New_York. Use this for open-ended questions like what is happening on a line this weekend. Each alert's own fields are MTA's; BetaNYC's reading of it (effect, counts_as_disruption, planned, alert_type_recognized) is in its `betanyc` object, and disrupting_alert_count counts those. Stop names come from a local station snapshot the user must refresh; see snapshot_as_of and snapshot_warning.",
+      "List MTA subway service alerts active on a date, with optional filters. Defaults to today in America/New_York. Use this for open-ended questions like what is happening on a line this weekend. disrupting_alert_count counts the alerts BetaNYC reads as disruptions.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -143,13 +224,15 @@ export const TOOLS = [
           enum: EFFECTS,
           description: "Restrict to one classified effect. 'unknown' means an alert_type this server does not recognize.",
         },
+        ...pagingProps("get_service_alerts"),
       },
     },
   },
   {
     name: "resolve_station",
+    title: "Find a subway station",
     description:
-      "Resolve free-text station names to GTFS parent-station ids, ranked best first, with the routes serving each and MTA's ADA status. Reads a bundled snapshot of MTA's static GTFS — no network call. The station list and ADA status are local snapshots the user must refresh; snapshot_as_of gives their dates and snapshot_warning flags old ones. Station names are not unique: '125 St' is four different stations on four different lines, so every candidate is returned rather than one guessed. route_id is the disambiguator.",
+      "Resolve free-text station names to GTFS parent-station ids, ranked best first, with the routes serving each and MTA's ADA status. Reads a bundled snapshot of MTA's static GTFS — no network call. Station names are not unique: '125 St' is four different stations on four different lines, so every candidate is returned rather than one guessed. route_id is the disambiguator.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -160,14 +243,16 @@ export const TOOLS = [
           description:
             "Restrict to stations served by this route, e.g. '6'. This is how an ambiguous name is narrowed to one station.",
         },
+        ...pagingProps("resolve_station"),
       },
       required: ["query"],
     },
   },
   {
     name: "get_accessibility_outages",
+    title: "Elevator and escalator outages",
     description:
-      "Elevator and escalator outages in the subway: in effect now, scheduled, or overlapping one date, with MTA's alternate route for each elevator. With stop_id, rows are placed by equipment ID using MTA's equipment inventory, with name matching as a fallback. Each row's own fields are MTA's; what BetaNYC adds (matched_by, which says how the row was placed, match_note, and the inventory's details for that equipment) is in its `betanyc` object. Zero matches is not proof of no outage, and no outage is not proof a station is usable; read no_match_note and station_accessibility. Equipment locations, alternate routes, and ADA status come from local snapshots the user must refresh; snapshot_as_of gives their dates and snapshot_warning flags old ones.",
+      "Elevator and escalator outages in the subway: in effect now, scheduled, or overlapping one date, with MTA's alternate route for each elevator. With stop_id, rows are placed by equipment ID using MTA's equipment inventory, with name matching as a fallback. Each row's `betanyc` object says how it was placed (matched_by, match_note) and adds the inventory's details for that equipment. Zero matches is not proof of no outage, and no outage is not proof a station is usable; read no_match_note and station_accessibility.",
     inputSchema: {
       type: "object",
       additionalProperties: false,
@@ -193,12 +278,18 @@ export const TOOLS = [
           description:
             "false (default) returns outages in effect now; true returns scheduled future outages. true cannot be combined with date.",
         },
+        ...pagingProps("get_accessibility_outages"),
       },
     },
   },
   // What's changed in this server, and who built it (BetaNYC standard tools).
   ...betanyc.tools,
-];
+], {
+  check_route_on_date: true,
+  get_service_alerts: true,
+  get_accessibility_outages: true,
+  resolve_station: false,
+});
 
 const ARG_SHAPES = {
   check_route_on_date: {
@@ -214,14 +305,16 @@ const ARG_SHAPES = {
     alert_type: z.string().optional(),
     planned_only: z.boolean().optional(),
     effect: z.enum(EFFECTS).optional(),
+    ...pagingArgs("get_service_alerts"),
   },
-  resolve_station: { query: z.string(), route_id: z.string().optional() },
+  resolve_station: { query: z.string(), route_id: z.string().optional(), ...pagingArgs("resolve_station") },
   get_accessibility_outages: {
     station: z.string().optional(),
     stop_id: z.string().optional(),
     route_id: z.string().optional(),
     date: z.string().optional(),
     upcoming: z.boolean().optional(),
+    ...pagingArgs("get_accessibility_outages"),
   },
 };
 
@@ -243,7 +336,18 @@ export function parseToolArgs<K extends keyof typeof ARG_SHAPES>(
   const rejected = parsed.error.issues.flatMap((issue) =>
     issue.code === "unrecognized_keys" ? issue.keys : []
   );
-  if (rejected.length === 0) throw parsed.error;
+  if (rejected.length === 0) {
+    // zod's own error is a JSON list of issues; say it as a sentence instead.
+    const issues = parsed.error.issues.map((i) => {
+      const where = i.path.length > 0 ? `'${i.path.join(".")}'` : "the arguments";
+      return i.code === "invalid_type" && i.received === "undefined"
+        ? `${where} is required`
+        : `${where}: ${i.message}`;
+    });
+    throw new Error(
+      `${tool} cannot use these arguments: ${issues.join("; ")}. Fix them and call again; the tool's input schema lists each parameter and its type.`
+    );
+  }
   throw new Error(
     `${tool} does not accept ${rejected.map((k) => `'${k}'`).join(", ")}. ` +
       `The parameters it accepts are: ${Object.keys(shape).join(", ")}. ` +
@@ -254,6 +358,69 @@ export function parseToolArgs<K extends keyof typeof ARG_SHAPES>(
 
 // ─── Shared shaping ──────────────────────────────────────────────────────────
 
+// ─── What BetaNYC did to the data, in every answer ──────────────────────────
+//
+// BetaNYC's rule: when BetaNYC changes a publisher's data in any way, the answer says so, and
+// says it the way about_data does. about_data answers "BetaNYC modified this data" for all five
+// sources (DATA-SOURCES.json), so every MTA tool answer carries, in `data_provenance`, one
+// shared-module provenance line per source it used: "BetaNYC modified this data: <what>. This
+// copy should not be considered the official record. ... Official record: <MTA's feed or file>".
+// The names, publisher and links come from DATA-SOURCES.json itself, so the two cannot drift.
+
+type SourceId = "service-alerts" | "elevator-outages" | "stations" | "station-accessibility" | "elevator-inventory";
+
+const DATA_SOURCES_FILE = JSON.parse(readFileSync(new URL("../DATA-SOURCES.json", import.meta.url), "utf8")) as {
+  sources: { id: string; source_name: string; publisher: { name: string }; source_url: string }[];
+};
+
+/** What BetaNYC did to each source, as one short clause. Agrees with DATA-SOURCES.json `changes`. */
+export const BETANYC_CHANGES: Record<SourceId, string> = {
+  "service-alerts":
+    "it kept only the alerts for this question; for header_text, description_text and human_readable_active_period it keeps one translation as plain text under MTA's field names (MTA's English one, or MTA's first one when there is no English) and drops the others; it added stop names from the station list and, in a separate betanyc object on each alert, its own reading of the alert (any disrupted answer or disruption count is BetaNYC's); MTA's other values are as MTA gave them",
+  "elevator-outages":
+    "it kept only the outages for this question and, when a station or name is given, lists them in its own order (best station match first); each row's fields are MTA's as published, and what BetaNYC adds (the station it placed the row at, how, and MTA's inventory details) is in a separate betanyc object",
+  stations:
+    "it built this station list from MTA's GTFS file (parent stations only) and worked out each station's routes from MTA's trips and stop times; where an answer lists station matches, their order and each score are BetaNYC's own ranking, not MTA's",
+  "station-accessibility":
+    "it kept only the ADA fields, direction labels and station ids, renamed three fields, and turned numbers stored as text into numbers; the ADA values are MTA's",
+  "elevator-inventory":
+    "it kept only the fields this server uses, turned numbers stored as text into numbers, and added the GTFS stations each piece of equipment is at",
+};
+
+const SNAPSHOT_SOURCE: Record<SnapshotName, SourceId> = {
+  stations: "stations",
+  station_ada: "station-accessibility",
+  equipment: "elevator-inventory",
+};
+
+type LiveUse = { id: "service-alerts" | "elevator-outages"; fetchedAt: number; feedTimestamp?: number };
+
+/** One provenance line per source an answer used, each saying BetaNYC modified it. */
+function dataProvenance(live: LiveUse[], snapshots: SnapshotName[]) {
+  const one = (id: SourceId, kind: "live" | "snapshot", asOf: string | null | undefined, now: Date) => {
+    const src = DATA_SOURCES_FILE.sources.find((x) => x.id === id);
+    if (!src) throw new Error(`DATA-SOURCES.json has no source '${id}'`);
+    const p = sourceLine(
+      {
+        sourceName: src.source_name,
+        publisher: src.publisher.name,
+        sourceUrl: src.source_url,
+        kind,
+        asOf: asOf ?? null,
+        changedByBetanyc: { kind: "modified-by-betanyc", detail: BETANYC_CHANGES[id] },
+      },
+      now
+    );
+    return { id, text: p.text, ...p.provenance };
+  };
+  return [
+    ...live.map((l) =>
+      one(l.id, "live", l.feedTimestamp ? new Date(l.feedTimestamp * 1000).toISOString() : null, new Date(l.fetchedAt))
+    ),
+    ...[...new Set(snapshots)].map((n) => one(SNAPSHOT_SOURCE[n], "snapshot", SNAPSHOTS[n].asOf(), new Date())),
+  ];
+}
+
 /**
  * Provenance attached to every payload.
  *
@@ -262,7 +429,7 @@ export function parseToolArgs<K extends keyof typeof ARG_SHAPES>(
  * than a minute; our cache TTL alone can do that, and MTA publishes no refresh
  * cadence for the feed itself, so no answer here is ever provably current.
  */
-function provenance(fetchedAt: number, feedTimestamp?: number) {
+function provenance(fetchedAt: number, feedTimestamp?: number, dataSource: string = DATA_SOURCE) {
   return {
     fetched_at: new Date(fetchedAt).toISOString(),
     feed_timestamp: feedTimestamp ?? null,
@@ -271,7 +438,8 @@ function provenance(fetchedAt: number, feedTimestamp?: number) {
     staleness_note: `Responses are served from an in-process cache for up to ${Math.round(
       cacheTtlMs() / 1000
     )}s, and MTA does not publish a refresh cadence for this feed. Treat every result as possibly stale.`,
-    data_source: DATA_SOURCE,
+    // The feed or feeds this answer read, with a link (issue #13).
+    data_source: dataSource,
     disclaimer: DISCLAIMER,
   };
 }
@@ -367,14 +535,24 @@ async function checkRouteOnDate(args: {
     // only honest disambiguator, and a remaining tie is returned, not guessed.
     const resolved = resolveStationStrict(args.station, args.route_id);
     if ("candidates" in resolved) {
+      // Only the first 10 candidates are listed; candidate_count counts them all, and
+      // resolve_station pages through every match. Nothing is fetched for this answer: it comes
+      // from the bundled station and ADA copies, so it names them as its source, dated in
+      // snapshot_as_of, and carries no fetched_at.
+      const shown = resolved.candidates.slice(0, LIMITS.resolve_station.default);
+      const total = resolved.candidates.length;
       return {
         route_id: args.route_id,
         date,
         resolved: false,
         reason: ambiguityReason(args.station, args.route_id, resolved.reason),
-        candidates: withAccessibility(resolved.candidates),
+        candidate_count: total,
+        candidates_showing: candidatesShowing(shown.length, total, args.station, args.route_id, resolved.reason),
+        candidates: withAccessibility(shown),
         ...snapshotFooter(["stations", "station_ada"]),
-        ...provenance(Date.now()),
+        data_source: STATIONS_DATA_SOURCE,
+        data_provenance: dataProvenance([], ["stations", "station_ada"]),
+        disclaimer: DISCLAIMER,
       };
     }
     station = resolved.station;
@@ -428,6 +606,12 @@ async function checkRouteOnDate(args: {
   const accessibilityOutages =
     args.include_accessibility && station ? await accessibilityOnDate(station, date) : null;
 
+  const snapshotsUsed: SnapshotName[] = [
+    "stations",
+    ...(station ? (["station_ada"] as SnapshotName[]) : []),
+    ...(accessibilityOutages ? (["equipment"] as SnapshotName[]) : []),
+  ];
+
   return {
     route_id: args.route_id,
     date,
@@ -455,15 +639,50 @@ async function checkRouteOnDate(args: {
         }`
       : null,
     accessibility_outages: accessibilityOutages,
-    ...snapshotFooter(
-      [
-        "stations",
-        ...(station ? (["station_ada"] as SnapshotName[]) : []),
-        ...(accessibilityOutages ? (["equipment"] as SnapshotName[]) : []),
-      ]
+    ...snapshotFooter(snapshotsUsed),
+    ...provenance(
+      fetchedAt,
+      feedTimestamp,
+      accessibilityOutages ? `${DATA_SOURCE}; ${ENE_DATA_SOURCE}` : DATA_SOURCE
     ),
-    ...provenance(fetchedAt, feedTimestamp),
+    data_provenance: dataProvenance(
+      [
+        { id: "service-alerts", fetchedAt, feedTimestamp },
+        ...(accessibilityOutages
+          ? [{ id: "elevator-outages" as const, fetchedAt: Date.parse(accessibilityOutages.fetched_at) }]
+          : []),
+      ],
+      snapshotsUsed
+    ),
   };
+}
+
+/**
+ * "Showing N of M" for the unresolved-station answer, saying which M it counts. For a tie, M is
+ * the stations tied for the best match on the route; resolve_station lists those first and then
+ * weaker matches, so its match_count can be larger. That is said here, so the two numbers are
+ * not read as a contradiction.
+ */
+function candidatesShowing(
+  shown: number,
+  total: number,
+  query: string,
+  routeId: string,
+  reason: "no-match" | "not-on-route" | "ambiguous"
+): string {
+  if (reason === "no-match") return "No station matches, so there are no candidates.";
+  if (reason === "not-on-route") {
+    return (
+      `Showing ${shown} of ${total} stations whose name matches '${query}', none of them on route ${routeId}.` +
+      (shown < total ? ` resolve_station with query '${query}' lists all ${total}, in pages.` : "")
+    );
+  }
+  return (
+    `Showing ${shown} of ${total} stations on route ${routeId} tied for the best match to '${query}'.` +
+    (shown < total
+      ? ` resolve_station with query '${query}' and route_id '${routeId}' lists these ${total} first, in pages, then weaker matches, so its match_count can be larger than ${total}.`
+      : "")
+  );
 }
 
 /** Candidates with MTA's ADA status, so a rider can choose among them. */
@@ -504,6 +723,8 @@ async function getServiceAlerts(args: {
   alert_type?: string;
   planned_only?: boolean;
   effect?: Effect;
+  limit?: number;
+  offset?: number;
 }) {
   const date = args.date ? assertIsoDate(args.date) : todayIso();
   const { entities, fetchedAt, feedTimestamp } = await loadAlerts();
@@ -537,14 +758,15 @@ async function getServiceAlerts(args: {
       ...new Set(shaped.filter((a) => !a.betanyc.alert_type_recognized).map((a) => a.alert_type)),
     ],
     known_alert_types: Object.keys(EFFECT_BY_ALERT_TYPE),
-    alerts: shaped,
+    ...(({ rows, paging }) => ({ paging, alerts: rows }))(page(shaped, "get_service_alerts", args)),
     // Stop names in affected_stops come from the station list.
     ...snapshotFooter(["stations"]),
     ...provenance(fetchedAt, feedTimestamp),
+    data_provenance: dataProvenance([{ id: "service-alerts", fetchedAt, feedTimestamp }], ["stations"]),
   };
 }
 
-function resolveStation(args: { query: string; route_id?: string }) {
+function resolveStation(args: { query: string; route_id?: string; limit?: number; offset?: number }) {
   if (args.route_id !== undefined) assertRouteFilterAvailable();
   const matches = resolveStationMatches(args.query, { routeId: args.route_id });
   const unambiguous =
@@ -557,7 +779,9 @@ function resolveStation(args: { query: string; route_id?: string }) {
     // Candidates are never collapsed. 193 of 496 parent stations share a name
     // with another station, so picking the first match is a coin flip dressed
     // up as an answer.
-    candidates: withAccessibility(matches),
+    ...(({ rows, paging }) => ({ paging, candidates: withAccessibility(rows) }))(
+      page(matches, "resolve_station", args)
+    ),
     note: unambiguous
       ? null
       : "More than one station matches equally well. Pass route_id to narrow, or pick a stop_id from the candidates.",
@@ -566,10 +790,14 @@ function resolveStation(args: { query: string; route_id?: string }) {
       source_url: STATIONS.source_url,
       station_count: STATIONS.count,
       route_membership: STATIONS.route_membership,
-      note: "Static snapshot of MTA's subway GTFS, bundled so station lookup makes no network call. MTA updates the regular subway GTFS a few times a year; re-generate with 'npm run stations'.",
+      note: "A station list BetaNYC built from a dated copy of MTA's subway GTFS file (parent stations only), bundled so station lookup makes no network call. Each station's routes are worked out by BetaNYC from MTA's trips and stop times, and the order of the candidates and each score are BetaNYC's own ranking, not MTA's. MTA updates the regular subway GTFS a few times a year; re-generate with 'npm run stations'.",
     },
     ada_data: adaData(),
     ...snapshotFooter(["stations", "station_ada"]),
+    // Nothing is fetched; both are bundled copies, dated in snapshot_as_of (issue #13).
+    data_source: STATIONS_DATA_SOURCE,
+    data_provenance: dataProvenance([], ["stations", "station_ada"]),
+    disclaimer: DISCLAIMER,
   };
 }
 
@@ -800,6 +1028,8 @@ async function getAccessibilityOutages(args: {
   route_id?: string;
   date?: string;
   upcoming?: boolean;
+  limit?: number;
+  offset?: number;
 }) {
   if (args.date !== undefined && args.upcoming === true) {
     // Two different questions. `date` already covers outages in effect now and
@@ -846,23 +1076,27 @@ async function getAccessibilityOutages(args: {
     ? byDate.filter((row) => rowMatchesRouteTokens(row, routeTokens) !== false)
     : byDate;
 
-  let outages: ShapedOutage[];
+  let allOutages: ShapedOutage[];
   let complex: ShapedOutage[] | null = null;
   let otherStation: ShapedOutage[] | null = null;
   let withoutStation: number | null = null;
   if (station) {
     const placed = placeAtStation(byRoute, station);
-    outages = placed.outages;
+    allOutages = placed.outages;
     complex = complexStopIds(station.stop_id).length > 0 ? placed.complex : null;
     otherStation = placed.other;
     withoutStation = placed.withoutStation;
   } else if (query) {
     const named = matchByName(byRoute, query);
-    outages = named.outages;
+    allOutages = named.outages;
     withoutStation = named.withoutStation;
   } else {
-    outages = byRoute.map((row) => shapeOutage(row, null, null, false));
+    allOutages = byRoute.map((row) => shapeOutage(row, null, null, false));
   }
+
+  // One page of the rows placed at this station or matched by name (issue #14). The other
+  // two lists stay whole: they hold outages at nearby stations, a handful at most.
+  const { rows: outages, paging } = page(allOutages, "get_accessibility_outages", args);
 
   // Caveats only for rows this answer actually returns. Rows are compared by
   // equipment and dates, since the shaped rows are copies.
@@ -888,6 +1122,9 @@ async function getAccessibilityOutages(args: {
     : null;
 
   const accessibility = station ? stationAccessibility(station.stop_id) : null;
+  // Only the files this answer read: the inventory places rows only when
+  // there is a station or a name to place them at.
+  const snapshotsUsed: SnapshotName[] = station ? ["equipment", "stations", "station_ada"] : query ? ["equipment"] : [];
 
   return {
     upcoming,
@@ -906,7 +1143,8 @@ async function getAccessibilityOutages(args: {
       : query
         ? "station name, matched loosely — MTA reports these outages with a free-text station name, not a GTFS stop_id, and the two spellings do not always agree. Pass stop_id to place rows by equipment ID instead."
         : null,
-    outage_count: outages.length,
+    outage_count: allOutages.length,
+    paging,
     rows_in_feed: rows.length,
     rows_without_station: query ? withoutStation : null,
     feed_note: date
@@ -917,7 +1155,7 @@ async function getAccessibilityOutages(args: {
     no_match_note: noMatchNote(
       query,
       args.route_id ?? null,
-      outages.length,
+      allOutages.length,
       otherStation?.length ?? 0,
       complex?.length ?? 0,
       rows,
@@ -930,12 +1168,9 @@ async function getAccessibilityOutages(args: {
     other_station_outages: otherStation,
     inventory_data: inventoryData(),
     ada_data: station ? adaData() : null,
-    // Only the files this answer read: the inventory places rows only when
-    // there is a station or a name to place them at.
-    ...snapshotFooter(
-      station ? ["equipment", "stations", "station_ada"] : query ? ["equipment"] : []
-    ),
-    ...provenance(fetchedAt),
+    ...snapshotFooter(snapshotsUsed),
+    ...provenance(fetchedAt, undefined, ENE_DATA_SOURCE),
+    data_provenance: dataProvenance([{ id: "elevator-outages", fetchedAt }], snapshotsUsed),
   };
 }
 
@@ -1095,10 +1330,48 @@ export async function callTool(name: string, args: unknown) {
       }
 
       default:
-        return { content: [{ type: "text", text: `Unknown tool: ${name}` }], isError: true };
+        return toolError(
+          `Unknown tool: ${name}. This server's tools are: ${TOOLS.map((t) => t.name).join(", ")}.`
+        );
     }
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
-    return { content: [{ type: "text", text: `Error: ${message}` }], isError: true };
+    return errorResult(err);
   }
+}
+
+const REPORT_BUG = "https://github.com/BetaNYC/mta-mcp/issues";
+
+/**
+ * Every failure as an isError result: one plain sentence on what went wrong and
+ * what to try, MTA's response body cut to 500 characters, no stack trace
+ * (toolError, from the shared module, starts the text with "Error: "). Issue
+ * #12. The tools' own errors are already sentences; a failed request to MTA is
+ * put into words here.
+ */
+export function errorResult(err: unknown): ToolResult {
+  if (err instanceof FeedError) {
+    const feed = ` Feed: ${err.url}`;
+    let message: string;
+    if (err.notJson) {
+      message = `MTA's feed answered, but with a web page or other text instead of data. That usually means MTA's feed is down for maintenance. Try again in a few minutes. For service right now, check https://www.mta.info.${feed}`;
+    } else if (err.timedOut) {
+      message = `MTA's feed did not answer within 15 seconds. Try again in a minute. For service right now, check https://www.mta.info.${feed}`;
+    } else if (err.status === null) {
+      message = `Could not reach MTA's feed (${errorSummary(err.reason || err)}). Check this computer's internet connection and try again.${feed}`;
+    } else if (err.status === 404) {
+      message = `MTA's feed answered 404 Not Found, so the feed address may have moved. Please report a bug in this server at ${REPORT_BUG}.${feed}`;
+    } else if (err.status === 429) {
+      message = `MTA's feed asked for fewer requests (HTTP 429) and was still saying so after two retries. Wait a minute and try again.${feed}`;
+    } else if (err.status >= 500) {
+      message = `MTA's feed had a problem on its side (HTTP ${err.status}) and was still failing after two retries. Try again in a few minutes. For service right now, check https://www.mta.info.${feed}`;
+    } else {
+      message = `MTA's feed refused the request (HTTP ${err.status}). That is likely a bug in this server; please report it at ${REPORT_BUG}.${feed}`;
+    }
+    return toolError(`${message}`, { upstreamBody: err.body });
+  }
+  // The tools' own errors are one plain sentence. The shared toolError drops stack-frame lines
+  // and caps the length (shared module 1.5.2); errorSummary also drops a frame line that is not
+  // indented and keeps only the first plain line, so nothing but the sentence reaches the user.
+  if (err instanceof Error) return toolError(errorSummary(err, 1_000));
+  return toolError(`The tool failed unexpectedly (${errorSummary(err)}). Please report a bug in this server at ${REPORT_BUG}.`);
 }

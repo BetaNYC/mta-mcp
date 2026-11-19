@@ -264,6 +264,26 @@ ADA row, that every equipment code in the saved outage feeds is placed at a
 station, and that the field names haven't changed. Review the diff: each
 record is on its own line, so a refresh shows only what changed.
 
+Both commands also rewrite `data/SHA256SUMS`, the SHA-256 of each file in
+`data/`, and `npm test` fails if a file no longer matches it. Each file
+already records when it was pulled (`generated_at`, `source.data_pulled_at`);
+the checksum records its exact bytes, so a hand edit or a half-written file is
+caught. After changing anything in `data/` another way, run
+`node scripts/data-checksums.mjs` (or `--check` to only compare).
+
+Each file says where its data came from as a link, never as a path on the
+machine that built it. `data/stations.json` records `generated_from` (the
+MTA zip's URL) and, from its next refresh, `source_sha256` (the zip's
+SHA-256). The copy bundled now was built before that field existed, so it
+does not have `source_sha256` yet; it will appear the next time someone runs
+`npm run stations`. Built with `--from-zip`, `generated_from` says the zip
+was a local file the operator supplied, said to be a copy of MTA's, and
+gives its SHA-256 (never its path), since the script cannot prove the file
+is MTA's. The other two files record the Socrata query they were pulled
+with. `npm test` fails if any file in `data/` or `test/fixtures/` contains a
+local path: a home folder, a mounted volume, a temp folder or a Windows
+drive path. The test checks path shapes, not the username running it.
+
 `npm run refresh-data` runs both commands.
 
 Nothing refreshes the snapshots for you: the server never fetches them, and

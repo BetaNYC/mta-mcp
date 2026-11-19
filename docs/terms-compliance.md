@@ -69,8 +69,8 @@ the same.
 **2. Say when data may be stale** (term 2): if output can lag the live feed by
 more than a minute, the app must say it "may not be real time." The 60-second
 cache alone can cause that lag, and MTA doesn't publish a refresh cadence for the
-feed. So every response sets `may_not_be_realtime` to `true` and includes a
-`staleness_note`.
+feed. So every answer that reads a feed sets `may_not_be_realtime` to `true` and
+includes a `staleness_note`.
 
 **3. Logos, maps, and symbols are licensed separately** from the free data terms.
 From MTA: "Our data feeds are free to use. But to use our logos, maps, symbols or
@@ -90,9 +90,11 @@ kept apart: in each service alert, BetaNYC's reading (its effect, whether it
 counts as a disruption, whether it is planned work, whether the status is one
 this server knows, and whether it bears on your station) is in a separate
 `betanyc` object. Each elevator or escalator outage row works the same way:
-MTA's row as published, with BetaNYC's additions (how the row was placed at a
-station, a note when the evidence is mixed, and the details from MTA's
-equipment inventory) in its own `betanyc` object. Answers such as `disrupted`
+each row's fields are MTA's as published, with BetaNYC's additions (how the row
+was placed at a station, a note when the evidence is mixed, and the details from
+MTA's equipment inventory) in its own `betanyc` object. When a station or name is
+given, the rows are listed in BetaNYC's order (best station match first), not
+the feed's. Answers such as `disrupted`
 are BetaNYC's, not MTA's.
 
 `about_data` says "BetaNYC modified this data" for all five MTA sources. Under

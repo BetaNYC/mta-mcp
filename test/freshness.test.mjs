@@ -1,6 +1,7 @@
 import { test, after } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import {
   SNAPSHOTS,
   assessFreshness,
@@ -259,7 +260,7 @@ test("answers report the real bundled dates, whatever they are", async () => {
 
 test("the startup notice goes to stderr, never stdout", async () => {
   const { spawnSync } = await import("node:child_process");
-  const server = new URL("../dist/index.js", import.meta.url).pathname;
+  const server = fileURLToPath(new URL("../dist/index.js", import.meta.url));
   // stdin closes at once, so the server starts, logs, and exits. No tool is
   // called, so nothing is fetched.
   const run = spawnSync(process.execPath, [server], { input: "", encoding: "utf8", timeout: 10_000 });

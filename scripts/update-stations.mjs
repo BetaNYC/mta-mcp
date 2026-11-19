@@ -25,10 +25,12 @@
 // times a year"). This is a maintenance script, not runtime — it may shell out.
 
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { writeChecksums } from "./data-checksums.mjs";
 
 export const GTFS_SUBWAY_ZIP_URL =
   "https://rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip";
@@ -197,6 +199,24 @@ function downloadZip() {
   return { zip, cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
+/**
+ * Where the stations came from, for a reader: the MTA file and its SHA-256.
+ * Never the path the zip sat at on disk, which names a machine and a user.
+ *
+ * With --from-zip the zip is whatever file the operator passed, so the record
+ * does not claim it is MTA's: it says the operator supplied it as a copy of the
+ * MTA file, and gives its SHA-256 so anyone can compare it with MTA's.
+ */
+export function zipProvenance(fromLocalZip, zipBytes) {
+  const sha256 = createHash("sha256").update(zipBytes).digest("hex");
+  return {
+    generated_from: fromLocalZip
+      ? `local zip supplied by the operator with --from-zip, said to be a copy of ${GTFS_SUBWAY_ZIP_URL} (sha256 ${sha256})`
+      : `download of ${GTFS_SUBWAY_ZIP_URL}`,
+    source_sha256: sha256,
+  };
+}
+
 function main(argv) {
   const fromIdx = argv.indexOf("--from-zip");
   const localZip = fromIdx !== -1 ? argv[fromIdx + 1] : null;
@@ -228,7 +248,7 @@ function main(argv) {
       generated_at: new Date().toISOString(),
       source_url: GTFS_SUBWAY_ZIP_URL,
       source_files: ["stops.txt", "trips.txt", "stop_times.txt"],
-      generated_from: localZip ? `local zip: ${localZip}` : "downloaded zip",
+      ...zipProvenance(Boolean(localZip), readFileSync(zipPath)),
       filter: "location_type=1 (GTFS parent stations)",
       // resolve_station reads this flag and refuses route_id filtering when it
       // is false, rather than ignoring the parameter and answering a different
@@ -248,7 +268,8 @@ function main(argv) {
   }
 
   writeFileSync(OUT_PATH, `${JSON.stringify(payload, null, 2)}\n`);
-  process.stdout.write(`Wrote ${payload.count} stations to ${OUT_PATH}\n`);
+  writeChecksums();
+  process.stdout.write(`Wrote ${payload.count} stations to ${OUT_PATH}, and data/SHA256SUMS\n`);
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

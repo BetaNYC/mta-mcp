@@ -60,6 +60,15 @@ BetaNYC is adding to each of its MCP servers.
 | `about_betanyc` | Who built this server, where to report a bug in this server or ask for a new feature, and BetaNYC's links |
 | `about_data` | Where each kind of data comes from, whether it is official, how current it is, its terms, and where to report an error, from [DATA-SOURCES.json](DATA-SOURCES.json) |
 
+**Changed in 0.4.0: two tools now answer one page at a time.**
+`get_service_alerts` and `get_accessibility_outages` used to return every
+alert or outage in one answer. Now they return one page: 20 alerts or 50
+outages by default. Each answer says "Showing N of M" in `paging.showing`, and
+the counts (`alert_count`, `outage_count`) still cover every match. To get the
+rest, call again with `offset` set to `paging.next_offset`, or ask for up to
+100 alerts or 200 outages at once with `limit`. Details:
+[Lists come in pages](docs/tools.md#lists-come-in-pages).
+
 Every field in every answer is documented in [docs/tools.md](docs/tools.md).
 Elevators and escalators have their own guide, including known gaps:
 [docs/accessibility.md](docs/accessibility.md).
@@ -174,6 +183,7 @@ questions like *what's going on with the Lexington Avenue line this weekend?*
 | `alert_type` | string | no | Exact MTA `alert_type`, e.g. `"Planned - Stops Skipped"` |
 | `planned_only` | boolean | no | Only planned work (entity id begins `lmm:planned_work:`) |
 | `effect` | string | no | One of `reduced`, `changed`, `delay`, `informational`, `added`, `added_at_local_stops`, `unknown` |
+| `limit`, `offset` | integer | no | Page through the alerts: 20 by default, at most 100. `paging.showing` says how many there are |
 
 ```json
 { "route_id": "6", "date": "2026-09-19" }
@@ -188,6 +198,7 @@ serving each. It reads the bundled station list and makes no network call.
 |---|---|---|---|
 | `query` | string | yes | Station name or fragment, e.g. `"68 St"` |
 | `route_id` | string | no | Restrict to stations this route serves. This is how you narrow an ambiguous name |
+| `limit`, `offset` | integer | no | Page through the candidates: 10 by default, at most 50 |
 
 ```json
 { "query": "125 St", "route_id": "6" }
@@ -229,6 +240,7 @@ Elevator and escalator outages.
 | `route_id` | string | no | Only outages whose `trainno` includes this route. `6X`, `7X`, and `FX` count as `6`, `7`, and `F`; the shuttles `GS`, `FS`, and `H` count as `S` |
 | `date` | string | no | `YYYY-MM-DD`. Outages in effect now or scheduled that overlap that day in New York time. Can't be combined with `upcoming: true` |
 | `upcoming` | boolean | no | `false` (default) for outages in effect now, `true` for scheduled ones |
+| `limit`, `offset` | integer | no | Page through the outages: 50 by default, at most 200 |
 
 ```json
 { "stop_id": "A27", "date": "2026-09-26" }
@@ -364,7 +376,8 @@ npm run refresh-data    # runs both: npm run stations, npm run accessibility-dat
 npm test                # checks the new files still join up
 ```
 
-This changes tracked files in `data/`. Run `git restore data/` before your next
+This changes tracked files in `data/`, including `data/SHA256SUMS`, the
+checksum of each file, which `npm test` checks. Run `git restore data/` before your next
 `git pull`, then refresh again. Then restart your MCP client so it loads the
 new files.
 
@@ -556,7 +569,9 @@ station too.
 
 So the server doesn't guess. `resolve_station` returns every candidate, and
 `check_route_on_date` returns the candidate list without an answer when a name
-matches more than one station. Pass `route_id` to narrow it. Route membership
+matches more than one station. That list shows 10 stations at most;
+`candidate_count` gives the full number, and `resolve_station` pages through
+the rest. Pass `route_id` to narrow it. Route membership
 comes from MTA's static GTFS.
 
 ### Connected stations with different names aren't linked
@@ -574,6 +589,11 @@ separately.
 updates a few times a year. A new or renamed station won't resolve
 until the file is regenerated. An unrecognized `stop_id` returns a clear
 error. It does not answer for the whole route.
+
+The bundled `data/stations.json` does not yet record the SHA-256 of the MTA
+zip it was built from (`source_sha256`), and its `generated_from` still reads
+"saved copy of …". Refreshing it needs the network, so it was left as is: the
+source checksum will be recorded at the next refresh (`npm run stations`).
 
 The ADA status and equipment inventory are snapshots too, from data.ny.gov.
 MTA posts station ADA status as needed, so a newly accessible station can
@@ -620,6 +640,7 @@ email or graphic. MTA's own `header_text`, which writes the route as ASCII
 npm install          # install + build
 npm run build        # tsc
 npm test             # build, then the full suite, with no network access
+npm run eval         # build, then the 12 eval questions against the saved feeds
 npm run smoke        # one live request to MTA; not part of npm test or CI
 npm run stations     # regenerate data/stations.json from MTA's static GTFS
 npm run accessibility-data  # regenerate data/station_ada.json and data/equipment.json from data.ny.gov
@@ -628,6 +649,11 @@ npm run accessibility-data  # regenerate data/station_ada.json and data/equipmen
 The suite runs against saved fixtures in `test/fixtures/` with `fetch` stubbed.
 That pins the assertions to a known feed, including the CityCamp regression and
 the express-to-local false positive, and it keeps CI from ever calling MTA.
+
+`npm run eval` asks the tools twelve questions a rider or reporter would ask,
+each with a known answer from the saved feeds, and prints PASS or FAIL for
+each. It makes no network request. Save a run with
+`node eval/run.mjs --out eval/runs/YYYY-MM-DD.txt` before a release.
 
 `npm run smoke` makes one GET to MTA and prints what came back. Run it by hand
 to confirm the server can still reach the feed.
@@ -642,6 +668,7 @@ Layout:
 | `src/mta.ts` | fetch, rate limiting, parsing, effect classification, station matching |
 | `src/mta.test.ts` | unit tests for the pure functions |
 | `test/*.test.mjs` | tool-level, schema, rate-limiter, and skill tests against fixtures |
+| `eval/questions.json`, `eval/run.mjs`, `eval/runs/` | the evaluation set, its runner, and saved results |
 | `test/helpers/fixture-fetch.mjs` | stands in for `fetch` when the skill tests run the script |
 | `skills/mta-subway/` | the skill: `SKILL.md` and the command-line script |
 | `docs/tools.md` | full tool reference |
@@ -652,6 +679,8 @@ Layout:
 | `data/equipment.json` | generated elevator and escalator inventory, from data.ny.gov `94fv-bak7` |
 | `scripts/update-stations.mjs` | regenerates `data/stations.json` from MTA's static GTFS |
 | `scripts/update-accessibility-data.mjs` | regenerates the two data.ny.gov snapshots |
+| `data/SHA256SUMS` | the SHA-256 of each file in `data/`, checked by `npm test` |
+| `scripts/data-checksums.mjs` | rewrites `data/SHA256SUMS` (the update scripts call it); `--check` only compares |
 | `scripts/smoke.mjs` | the single live request |
 | `scripts/whats_changed.py` | checks `WHATS-CHANGED.md` and builds `docs/whats-changed.html`, a copy of the BetaNYC shared script. Never edit it here |
 | `WHATS-CHANGED.md` | the reader-facing record of changes, read by `whats_changed` |

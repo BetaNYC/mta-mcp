@@ -245,9 +245,9 @@
         }
       ],
       "provenance": [
-        "BetaNYC modified this data: left some records out, left some fields out, joined it with other data, and counted or added up records. This copy should not be considered the official record. Official record: MTA subway service alerts feed (GTFS-realtime, JSON) (Metropolitan Transportation Authority), https://api.mta.info/#/serviceAlerts",
+        "BetaNYC modified this data: left some records out, left some fields out, joined it with other data, counted or added up records, and reshaped it. This copy should not be considered the official record. Official record: MTA subway service alerts feed (GTFS-realtime, JSON) (Metropolitan Transportation Authority), https://api.mta.info/#/serviceAlerts",
         "Read-only requests to MTA's public feed when a tool is called, with no API key. Each response is kept in memory for up to 60 seconds, so an answer can lag the feed by about a minute.",
-        "Modified by BetaNYC: BetaNYC uses part of the feed: each answer keeps the alerts for the route, date or station asked about, and the English text where MTA gives one (MTA's terms allow an app to use some but not all of the data). It adds stop names from the station list (topic stations), and check_route_on_date can add the station's accessibility status and elevator outages. Next to MTA's fields, in a separate betanyc object on each alert, BetaNYC adds its own reading: an effect from MTA's alert type, whether it counts as a disruption, and whether it is planned work. check_route_on_date gives a yes-or-no answer from that reading, and get_service_alerts counts the alerts it reads as disruptions. These are BetaNYC's, not MTA's data. MTA's own values are passed on unaltered."
+        "Modified by BetaNYC: BetaNYC uses part of the feed: each answer keeps the alerts for the route, date or station asked about (MTA's terms allow an app to use some but not all of the data). For header_text, description_text and human_readable_active_period, BetaNYC keeps one translation as plain text under MTA's field names (MTA's English one, or MTA's first one when there is no English) and drops the other translations. It adds stop names from the station list (topic stations), and check_route_on_date can add the station's accessibility status and elevator outages. Next to MTA's fields, in a separate betanyc object on each alert, BetaNYC adds its own reading: an effect from MTA's alert type, whether it counts as a disruption, and whether it is planned work. check_route_on_date gives a yes-or-no answer from that reading, and get_service_alerts counts the alerts it reads as disruptions. These are BetaNYC's, not MTA's data. MTA's other values are passed on as MTA gave them."
       ],
       "page": [
         {
@@ -276,6 +276,10 @@
         {
           "@type": "Activity",
           "label": "counted"
+        },
+        {
+          "@type": "Activity",
+          "label": "reshaped"
         }
       ],
       "accrualPeriodicity": "continual",
@@ -348,9 +352,9 @@
         }
       ],
       "provenance": [
-        "BetaNYC modified this data: left some records out, joined it with other data, and matched addresses to places. This copy should not be considered the official record. Official record: MTA elevator and escalator outage feeds (current and upcoming) (Metropolitan Transportation Authority), https://api.mta.info/#/EAndEFeeds",
+        "BetaNYC modified this data: left some records out, joined it with other data, matched addresses to places, and reshaped it. This copy should not be considered the official record. Official record: MTA elevator and escalator outage feeds (current and upcoming) (Metropolitan Transportation Authority), https://api.mta.info/#/EAndEFeeds",
         "Read-only requests to MTA's public feeds when a tool is called, with no API key. Each response is kept in memory for up to 60 seconds.",
-        "Modified by BetaNYC: BetaNYC uses part of the feed: each answer keeps the outages for the station, line or date asked about (MTA's terms allow an app to use some but not all of the data). In a separate betanyc object on each row, BetaNYC adds the station the outage is placed at, found by joining MTA's equipment number to MTA's elevator inventory (topic elevator-inventory) or, when that fails, by matching MTA's station name; how it was matched; a note when the evidence is mixed; and the inventory's details for that equipment, including MTA's alternate route. These are BetaNYC's additions, not MTA's data. MTA's own values are passed on unaltered."
+        "Modified by BetaNYC: BetaNYC uses part of the feed: each answer keeps the outages for the station, line or date asked about (MTA's terms allow an app to use some but not all of the data), and when a station or name is given, lists them in BetaNYC's own order, best station match first. In a separate betanyc object on each row, BetaNYC adds the station the outage is placed at, found by joining MTA's equipment number to MTA's elevator inventory (topic elevator-inventory) or, when that fails, by matching MTA's station name; how it was matched; a note when the evidence is mixed; and the inventory's details for that equipment, including MTA's alternate route. These are BetaNYC's additions, not MTA's data. Each row's own fields are MTA's values as published; the order of the rows is BetaNYC's."
       ],
       "page": [
         {
@@ -375,6 +379,10 @@
         {
           "@type": "Activity",
           "label": "address-matched"
+        },
+        {
+          "@type": "Activity",
+          "label": "reshaped"
         }
       ],
       "accrualPeriodicity": "continual",
@@ -449,7 +457,7 @@
       "provenance": [
         "BetaNYC modified this data: left some records out, joined it with other data, and reshaped it. This copy should not be considered the official record. Official record: MTA regular subway GTFS (static schedule data) (Metropolitan Transportation Authority), https://rrgtfsfeeds.s3.amazonaws.com/gtfs_subway.zip",
         "A dated copy kept in the repository as data/stations.json, built from MTA's GTFS file by scripts/update-stations.mjs (npm run stations). The server never downloads it; whoever runs the server refreshes it by hand.",
-        "Modified by BetaNYC: Only parent stations are kept (location_type 1), with their id, name and location. The routes serving each station are worked out by joining the GTFS trips and stop times."
+        "Modified by BetaNYC: BetaNYC builds its own station list from MTA's GTFS file. Only parent stations are kept (location_type 1), with their id, name and location. The routes field on each station is worked out by BetaNYC, by joining the GTFS trips and stop times. When a tool lists matching stations, their order and each candidate's score are BetaNYC's own ranking of how well the name matches, not MTA's."
       ],
       "page": [
         {
